@@ -410,11 +410,20 @@ def create_activity(current_user):
         payload = request.form.to_dict()
     if not payload:
         return jsonify({"status": "error", "message": "Invalid request: No JSON or form data received"}), 400
-    for key in ("participants", "days", "dates"):
+    # Convert comma-separated participant IDs into a list of integers
+    if "participants" in payload and isinstance(payload["participants"], str):
+        try:
+            payload["participants"] = [
+                int(p.strip()) for p in payload["participants"].split(",") if p.strip()
+            ]
+        except ValueError:
+            return jsonify({"status": "error", "message": "Invalid format for participants"}), 400
+
+    for key in ("days", "dates"):
         if key in payload and isinstance(payload[key], str):
             try:
                 payload[key] = json.loads(payload[key])
-            except (ValueError, TypeError):
+            except (json.JSONDecodeError, TypeError):
                 pass
     for key in ("week", "year"):
         if key in payload:
