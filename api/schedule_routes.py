@@ -9,6 +9,7 @@ from time import sleep
 from datetime import datetime
 import uuid
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 schedule_bp = Blueprint('schedule_bp', __name__)
@@ -403,7 +404,19 @@ def list_activities(current_user):
 @token_required
 @retry_on_connection_error
 def create_activity(current_user):
-    payload = request.get_json(silent=True) or {}
+    payload = request.form.to_dict()
+    for key in ("participants", "days", "dates"):
+        if key in payload:
+            try:
+                payload[key] = json.loads(payload[key])
+            except (ValueError, TypeError):
+                pass
+    for key in ("week", "year"):
+        if key in payload:
+            try:
+                payload[key] = int(payload[key])
+            except (ValueError, TypeError):
+                pass
     try:
         v = _validate_activity_payload(payload)
     except ValueError as ve:
