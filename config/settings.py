@@ -38,7 +38,7 @@ CORS_ORIGINS = [
     'https://drive-c-frontend.vercel.app', # In case the URL changes to production
     'https://drive-c-frontend-git-split-tobias-lundhs-projects.vercel.app',
     'https://drive-c-frontend-5q8e56t64-tobias-lundhs-projects.vercel.app',
-    'https://drive-c-frontend-git-main-2-tobias-lundhs-projects.vercel.app/login',
+    'https://drive-c-frontend-git-main-2-tobias-lundhs-projects.vercel.app',
     os.environ.get('FRONTEND_URL', ''),  # From environment variable
 ]
 
