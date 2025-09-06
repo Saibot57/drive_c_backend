@@ -404,9 +404,14 @@ def list_activities(current_user):
 @token_required
 @retry_on_connection_error
 def create_activity(current_user):
-    payload = request.form.to_dict()
+    if request.is_json:
+        payload = request.get_json(silent=True) or {}
+    else:
+        payload = request.form.to_dict()
+    if not payload:
+        return jsonify({"status": "error", "message": "Invalid request: No JSON or form data received"}), 400
     for key in ("participants", "days", "dates"):
-        if key in payload:
+        if key in payload and isinstance(payload[key], str):
             try:
                 payload[key] = json.loads(payload[key])
             except (ValueError, TypeError):
