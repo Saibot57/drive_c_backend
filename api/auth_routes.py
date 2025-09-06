@@ -76,17 +76,10 @@ class JWT:
 jwt = JWT
 from config.settings import SECRET_KEY
 
-# ---- Preflight: svara 204 tidigt så auth inte körs ----
-@auth.before_request
-def auth_handle_preflight():
-    if request.method == "OPTIONS":
-        return ("", 204)
-
-# ---- Auth-dekorator (berör inte OPTIONS) ----
+# ---- Auth-dekorator (OPTIONS passas vidare utan validering) ----
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        # Preflight fångas redan i before_request
         auth_header = request.headers.get("Authorization", "")
         token = auth_header.split(" ", 1)[1] if auth_header.startswith("Bearer ") else None
         if not token:
