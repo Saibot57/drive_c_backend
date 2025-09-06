@@ -1,0 +1,150 @@
+[
+    {
+        "id": "1PIOnzPELfR9JDYif4cOnN-Lxo9REy0I7",
+        "name": " Böcker",
+        "type": "Folder",
+        "url": "https://drive.google.com/drive/folders/1PIOnzPELfR9JDYif4cOnN-Lxo9REy0I7",
+        "created_time": "2024-10-18T22:51:29.684Z",
+        "size": null,
+        "tags": [],
+        "NotebookLM": null,
+        "children": [
+            {
+                "id": "1hgKhbI9BmgAqYcP8XAgZY-IenKcjDziX",
+                "name": "Catcher in the rye.pdf",
+                "type": "File",
+                "url": "https://drive.google.com/file/d/1hgKhbI9BmgAqYcP8XAgZY-IenKcjDziX/view?usp=drivesdk",
+                "created_time": "2024-10-22T15:29:42.492Z",
+                "size": 597365,
+                "tags": [],
+                "NotebookLM": null
+            },
+            {
+                "id": "1K-QBBaAlyT1Eq5hKuHwDoNmv8bYwpPDE",
+                "name": "A history of world societies.pdf",
+                "type": "File",
+                "url": "https://drive.google.com/file/d/1K-QBBaAlyT1Eq5hKuHwDoNmv8bYwpPDE/view?usp=drivesdk",
+                "created_time": "2024-10-21T09:23:36.179Z",
+                "size": 48993490,
+                "tags": [],
+                "NotebookLM": null
+            },
+            {
+                "id": "1NXQ-63zr-kc76gXcXyZDrEFUF8GR6DTW",
+                "name": "Om man älskar frihet - tankar om det politiska.pdf",
+                "type": "File",
+                "url": "https://drive.google.com/file/d/1NXQ-63zr-kc76gXcXyZDrEFUF8GR6DTW/view?usp=drivesdk",
+                "created_time": "2024-10-18T22:54:13.039Z",
+                "size": 1629461,
+                "tags": [
+                    "#ninabjörk; #svår"
+                ],
+                "NotebookLM": null
+            },
+            {
+                "id": "1Vf5oCFufaiO8uF2LFb1YqVGrprjBsCy-",
+                "name": "När framtiden redan hänt.pdf",
+                "type": "File",
+                "url": "https://drive.google.com/file/d/1Vf5oCFufaiO8uF2LFb1YqVGrprjBsCy-/view?usp=drivesdk",
+                "created_time": "2024-10-18T22:52:29.704Z",
+                "size": 1369520,
+                "tags": [
+                    "#svår"
+                ],
+                "NotebookLM": null
+            }
+        ]
+    },
+    {
+        "id": "1JVU6QHEvRX6gG4Y51qhK-2_wRr96y7Eq",
+        "name": "Livet",
+        "type": "Folder",
+        "url": "https://drive.google.com/drive/folders/1JVU6QHEvRX6gG4Y51qhK-2_wRr96y7Eq",
+        "created_time": "2024-10-18T09:40:10.914Z",
+        "size": null,
+        "tags": [],
+        "NotebookLM": null,
+        "children": []
+    },
+    {
+        "id": "1cAgVHGdr58fYE0P2yLpFWEsnooeDMiiG",
+        "name": "Tema ",
+        "type": "Folder",
+        "url": "https://drive.google.com/drive/folders/1cAgVHGdr58fYE0P2yLpFWEsnooeDMiiG",
+        "created_time": "2024-10-18T09:39:45.669Z",
+        "size": null,
+        "tags": [],
+        "NotebookLM": null,
+        "children": [
+            {
+                "id": "1T4Ft89Aujt2ZFbFohMxNPlNHfGcKverv",
+                "name": "Skrivande",
+                "type": "Folder",
+                "url": "https://drive.google.com/drive/folders/1T4Ft89Aujt2ZFbFohMxNPlNHfGcKverv",
+                "created_time": "2024-10-18T09:40:03.558Z",
+                "size": null,
+                "tags": [],
+                "NotebookLM": null,
+                "children": []
+            },
+            {
+                "id": "1m48mBt3WvZh0Z5POqt_gXJkuIYs2w2oN",
+                "name": "Historia",
+                "type": "Folder",
+                "url": "https://drive.google.com/drive/folders/1m48mBt3WvZh0Z5POqt_gXJkuIYs2w2oN",
+                "created_time": "2024-10-18T09:39:58.753Z",
+                "size": null,
+                "tags": [],
+                "NotebookLM": null,
+                "children": [
+                            {
+                                "id": "1XWv_-fP0K4Z0kspDf1DXmrKRgXTOklpn",
+                                "name": "Skönhetsideal genom tiderna.pdf",
+                                "type": "File",
+                                "url": "https://drive.google.com/file/d/1XWv_-fP0K4Z0kspDf1DXmrKRgXTOklpn/view?usp=drivesdk",
+                                "created_time": "2024-10-18T09:40:46.144Z",
+                                "size": 15894803,
+                                "tags": [],
+                                "NotebookLM": null
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "id": "1NVFLzOafIULhcVL-XapfsdLS9L8_6KM3",
+        "name": "Engelska",
+        "type": "Folder",
+        "url": "https://drive.google.com/drive/folders/1NVFLzOafIULhcVL-XapfsdLS9L8_6KM3",
+        "created_time": "2024-10-18T09:39:38.417Z",
+        "size": null,
+        "tags": [],
+        "NotebookLM": null,
+        "children": [
+            {
+                "id": "1RXkDYVZmtQbl3I2tjrCaHXR554YVN-MglB-TuVxM-XU",
+                "name": "Kopia av Criteria",
+                "type": "File",
+                "url": "https://docs.google.com/document/d/1RXkDYVZmtQbl3I2tjrCaHXR554YVN-MglB-TuVxM-XU/edit?usp=drivesdk",
+                "created_time": "2024-10-22T15:30:17.642Z",
+                "size": 2818,
+                "tags": [],
+                "NotebookLM": null
+            },
+            {
+                "id": "1mhwpRnVTfoULXgERe4uVs7xksZD1N-ZC",
+                "name": "Links to poems.docx",
+                "type": "File",
+                "url": "https://docs.google.com/document/d/1mhwpRnVTfoULXgERe4uVs7xksZD1N-ZC/edit?usp=drivesdk&ouid=109977868085680856251&rtpof=true&sd=true",
+                "created_time": "2024-10-18T23:33:57.945Z",
+                "size": 17866,
+                "tags": [
+                    "#poetry;"
+                ],
+                "NotebookLM": null
+            }
+        ]
+    }
+]

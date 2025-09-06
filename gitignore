@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.env
+.venv
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Flask specific
+instance/
+.webassets-cache
+flask_session/
+
+# Project specific
+credentials.json
+drive_contents.json
+*.log
+
+# Database
+*.db
+*.sqlite3
+
+# OS specific
+.DS_Store
+Thumbs.db
+._*
+.Spotlight-V100
+.Trashes
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
