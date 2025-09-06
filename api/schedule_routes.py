@@ -294,9 +294,12 @@ def get_schedule_settings(current_user):
         db.session.add(s)
         db.session.commit()
     return jsonify({
-        "showWeekends": bool(s.show_weekends),
-        "dayStart": int(s.day_start),
-        "dayEnd": int(s.day_end),
+        "status": "success",
+        "data": {
+            "showWeekends": bool(s.show_weekends),
+            "dayStart": int(s.day_start),
+            "dayEnd": int(s.day_end),
+        }
     })
 
 @schedule_bp.route('/settings', methods=['PUT'])
@@ -319,9 +322,12 @@ def update_schedule_settings(current_user):
 
     db.session.commit()
     return jsonify({
-        "showWeekends": bool(s.show_weekends),
-        "dayStart": int(s.day_start),
-        "dayEnd": int(s.day_end),
+        "status": "success",
+        "data": {
+            "showWeekends": bool(s.show_weekends),
+            "dayStart": int(s.day_start),
+            "dayEnd": int(s.day_end),
+        }
     })
 
 # ---------------- Routes: Family members ----------------
@@ -330,11 +336,38 @@ def update_schedule_settings(current_user):
 @retry_on_connection_error
 def get_family_members(current_user):
     ms = FamilyMember.query.filter_by(user_id=current_user.id).all()
-    return jsonify([{
-        "id": m.id,
-        "name": m.name,
-        "icon": m.icon
-    } for m in ms])
+
+    if not ms:
+        default_members = [
+            {"id": "rut", "name": "Rut", "color": "#FF6B6B", "icon": "👧"},
+            {"id": "pim", "name": "Pim", "color": "#4E9FFF", "icon": "👦"},
+            {"id": "siv", "name": "Siv", "color": "#6BCF7F", "icon": "👧"},
+            {"id": "mamma", "name": "Mamma", "color": "#A020F0", "icon": "👩"},
+            {"id": "pappa", "name": "Pappa", "color": "#FF9F45", "icon": "👨"},
+        ]
+
+        for member_data in default_members:
+            member = FamilyMember(
+                id=member_data["id"],
+                user_id=current_user.id,
+                name=member_data["name"],
+                color=member_data["color"],
+                icon=member_data["icon"]
+            )
+            db.session.add(member)
+            ms.append(member)
+
+        db.session.commit()
+
+    return jsonify({
+        "status": "success",
+        "data": [{
+            "id": m.id,
+            "name": m.name,
+            "color": m.color,
+            "icon": m.icon
+        } for m in ms]
+    })
 
 # ---------------- Routes: Activities (CRUD) ----------------
 @schedule_bp.route('/activities', methods=['GET'])
@@ -370,7 +403,7 @@ def list_activities(current_user):
             "participants": [m.id for m in a.participants],  # id:n utåt
         }
 
-    return jsonify([dto(a) for a in acts])
+    return jsonify({"status": "success", "data": [dto(a) for a in acts]})
 
 @schedule_bp.route('/activities', methods=['POST'])
 @token_required
@@ -416,6 +449,7 @@ def create_activity(current_user):
         return jsonify({"status": "error", "message": "Conflicts detected", "conflicts": conflicts}), 409
 
     # Skapa alla
+    created_activities = []
     for inst in instances:
         a = Activity(
             id=str(uuid.uuid4()),
@@ -436,9 +470,16 @@ def create_activity(current_user):
             if pid in by_id:
                 a.participants.append(by_id[pid])
         db.session.add(a)
+        created_activities.append(a)
 
     db.session.commit()
-    return jsonify({"status": "success", "created": len(instances)}), 201
+    return jsonify({
+        "status": "success",
+        "data": {
+            "id": created_activities[0].id if len(created_activities) == 1 else None,
+            "created": len(created_activities)
+        }
+    }), 201
 
 @schedule_bp.route('/activities/<activity_id>', methods=['PUT'])
 @token_required
