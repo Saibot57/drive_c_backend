@@ -39,12 +39,6 @@ def create_app():
         intercept_exceptions=False,
     )
 
-    # --- Global preflight: svara TIDIGT med tom 204 för alla /api/* ---
-    @app.before_request
-    def global_preflight():
-        if request.method == "OPTIONS" and request.path.startswith("/api/"):
-            return ("", 204)
-
     # (Valfritt men robust): spegla begärda headers på preflight
     @app.after_request
     def mirror_requested_cors_headers(resp):

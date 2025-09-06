@@ -13,12 +13,6 @@ import logging
 logger = logging.getLogger(__name__)
 schedule_bp = Blueprint('schedule_bp', __name__)
 
-# ---------------- CORS preflight (behåll) ----------------
-@schedule_bp.before_request
-def schedule_handle_preflight():
-    if request.method == 'OPTIONS':
-        return ("", 204)
-
 # ---------------- Retry-hjälpare ----------------
 def retry_on_connection_error(func):
     """Retry DB-operationer som kan kasta OperationalError (t.ex. tappad MySQL-anslutning)."""
