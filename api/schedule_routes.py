@@ -339,16 +339,16 @@ def get_family_members(current_user):
 
     if not ms:
         default_members = [
-            {"id": "rut", "name": "Rut", "color": "#FF6B6B", "icon": "👧"},
-            {"id": "pim", "name": "Pim", "color": "#4E9FFF", "icon": "👦"},
-            {"id": "siv", "name": "Siv", "color": "#6BCF7F", "icon": "👧"},
-            {"id": "mamma", "name": "Mamma", "color": "#A020F0", "icon": "👩"},
-            {"id": "pappa", "name": "Pappa", "color": "#FF9F45", "icon": "👨"},
+            {"name": "Rut", "color": "#FF6B6B", "icon": "👧"},
+            {"name": "Pim", "color": "#4E9FFF", "icon": "👦"},
+            {"name": "Siv", "color": "#6BCF7F", "icon": "👧"},
+            {"name": "Mamma", "color": "#A020F0", "icon": "👩"},
+            {"name": "Pappa", "color": "#FF9F45", "icon": "👨"},
         ]
 
         for member_data in default_members:
             member = FamilyMember(
-                id=member_data["id"],
+                id=str(uuid.uuid4()),
                 user_id=current_user.id,
                 name=member_data["name"],
                 color=member_data["color"],
