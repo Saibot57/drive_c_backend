@@ -11,11 +11,13 @@ import uuid
 logger = logging.getLogger(__name__)
 notes = Blueprint('notes', __name__)
 
-# --- Preflight: svara tom 204 så dekorerare/body-parsing inte körs ---
-@notes.before_request
-def notes_handle_preflight():
-    if request.method == 'OPTIONS':
-        return ("", 204)
+
+def success_response(data=None, status_code=200):
+    return jsonify({"success": True, "data": data if data is not None else {}, "error": None}), status_code
+
+
+def error_response(message, status_code=400, data=None):
+    return jsonify({"success": False, "data": data, "error": message}), status_code
 
 # --- Hjälpare ---
 def _norm_path(p: str) -> str:
@@ -86,16 +88,16 @@ def list_files(current_user):
                 'created_time': f.created_time.isoformat() if f.created_time else None
             } for f in filtered]
 
-            return jsonify({"status": "success", "data": response_data})
+            return success_response(response_data)
 
         except Exception as db_error:
             logger.error(f"Database error in list_files: {str(db_error)}")
             db.session.rollback()
-            return jsonify({"status": "error", "message": "Database error"}), 500
+            return error_response("Database error", 500)
 
     except Exception as e:
         logger.error(f"Error in list_files: {str(e)}")
-        return jsonify({"status": "error", "message": "Failed to list files"}), 500
+        return error_response("Failed to list files", 500)
 
 # --------------------- Create directory ---------------------
 
@@ -106,7 +108,7 @@ def create_directory(current_user):
     try:
         data = request.get_json(silent=True) or {}
         if 'path' not in data:
-            return jsonify({"status": "error", "message": "Path is required"}), 400
+            return error_response("Path is required", 400)
 
         path = _norm_path(data['path'])
         dir_name = os.path.basename(path)
@@ -119,7 +121,7 @@ def create_directory(current_user):
             file_path=path, is_folder=True, user_id=current_user.id
         ).first()
         if existing_dir:
-            return jsonify({"status": "error", "message": f"Directory already exists: {path}"}), 400
+            return error_response(f"Directory already exists: {path}", 400)
 
         # För icke-root: kräver existerande parent
         if parent_path != "/":
@@ -127,7 +129,7 @@ def create_directory(current_user):
                 file_path=parent_path, is_folder=True, user_id=current_user.id
             ).first()
             if not parent_dir:
-                return jsonify({"status": "error", "message": f"Parent directory does not exist: {parent_path}"}), 400
+                return error_response(f"Parent directory does not exist: {parent_path}", 400)
 
         new_dir = DriveFile(
             id=str(uuid.uuid4()),
@@ -140,20 +142,17 @@ def create_directory(current_user):
         db.session.add(new_dir)
         db.session.commit()
 
-        return jsonify({
-            "status": "success",
-            "data": {
-                "id": new_dir.id,
-                "name": new_dir.name,
-                "file_path": new_dir.file_path,
-                "is_folder": True,
-                "created_time": new_dir.created_time.isoformat()
-            }
+        return success_response({
+            "id": new_dir.id,
+            "name": new_dir.name,
+            "file_path": new_dir.file_path,
+            "is_folder": True,
+            "created_time": new_dir.created_time.isoformat()
         })
     except Exception as e:
         logger.error(f"Error in create_directory: {str(e)}")
         db.session.rollback()
-        return jsonify({"status": "error", "message": "Failed to create directory"}), 500
+        return error_response("Failed to create directory", 500)
 
 # --------------------- Save note ---------------------
 
@@ -164,7 +163,7 @@ def save_note(current_user):
     try:
         data = request.get_json(silent=True) or {}
         if 'path' not in data or 'content' not in data:
-            return jsonify({"status": "error", "message": "Path and content are required"}), 400
+            return error_response("Path and content are required", 400)
 
         path = _norm_path(data['path'])
         content = data['content']
@@ -182,7 +181,7 @@ def save_note(current_user):
                 file_path=parent_path, is_folder=True, user_id=current_user.id
             ).first()
             if not parent_dir:
-                return jsonify({"status": "error", "message": f"Parent directory does not exist: {parent_path}"}), 400
+                return error_response(f"Parent directory does not exist: {parent_path}", 400)
 
         existing_file = DriveFile.query.filter_by(
             file_path=path, is_folder=False, user_id=current_user.id
@@ -235,15 +234,11 @@ def save_note(current_user):
             file_id = new_file.id
             message = "Note created successfully"
 
-        return jsonify({
-            "status": "success",
-            "message": message,
-            "data": {"id": file_id, "name": file_name, "file_path": path}
-        })
+        return success_response({"id": file_id, "name": file_name, "file_path": path, "message": message})
     except Exception as e:
         logger.error(f"Error in save_note: {str(e)}")
         db.session.rollback()
-        return jsonify({"status": "error", "message": "Failed to save note"}), 500
+        return error_response("Failed to save note", 500)
 
 # --------------------- Get note ---------------------
 
@@ -254,7 +249,7 @@ def get_note(current_user):
     try:
         path = request.args.get('path')
         if not path:
-            return jsonify({"status": "error", "message": "Path is required"}), 400
+            return error_response("Path is required", 400)
         path = _norm_path(path)
 
         logger.info(f"Getting note content from: {path}")
@@ -263,7 +258,7 @@ def get_note(current_user):
             file_path=path, is_folder=False, user_id=current_user.id
         ).first()
         if not note_file:
-            return jsonify({"status": "error", "message": f"Note not found: {path}"}), 404
+            return error_response(f"Note not found: {path}", 404)
 
         note_content = NoteContent.query.filter_by(file_id=note_file.id).first()
         if not note_content:
@@ -280,18 +275,15 @@ def get_note(current_user):
         tags = note_file.tags.split(',') if note_file.tags else []
         description = note_file.notebooklm or ""
 
-        return jsonify({
-            "status": "success",
-            "data": {
-                "id": note_file.id,
-                "content": note_content.content,
-                "tags": tags,
-                "description": description
-            }
+        return success_response({
+            "id": note_file.id,
+            "content": note_content.content,
+            "tags": tags,
+            "description": description
         })
     except Exception as e:
         logger.error(f"Error in get_note: {str(e)}")
-        return jsonify({"status": "error", "message": "Failed to get note"}), 500
+        return error_response("Failed to get note", 500)
 
 # --------------------- Delete file/dir ---------------------
 
@@ -302,14 +294,14 @@ def delete_file(current_user):
     try:
         path = request.args.get('path')
         if not path:
-            return jsonify({"status": "error", "message": "Path is required"}), 400
+            return error_response("Path is required", 400)
         path = _norm_path(path)
 
         logger.info(f"Deleting file or directory: {path}")
 
         file_item = DriveFile.query.filter_by(file_path=path, user_id=current_user.id).first()
         if not file_item:
-            return jsonify({"status": "error", "message": f"Item not found: {path}"}), 404
+            return error_response(f"Item not found: {path}", 404)
 
         # Om katalog: radera alla barn först
         if file_item.is_folder:
@@ -330,11 +322,11 @@ def delete_file(current_user):
         db.session.delete(file_item)
         db.session.commit()
 
-        return jsonify({"status": "success", "message": f"Successfully deleted: {path}"})
+        return success_response({"message": f"Successfully deleted: {path}"})
     except Exception as e:
         logger.error(f"Error in delete_file: {str(e)}")
         db.session.rollback()
-        return jsonify({"status": "error", "message": "Failed to delete file"}), 500
+        return error_response("Failed to delete file", 500)
 
 # --------------------- Move file/dir ---------------------
 
@@ -347,17 +339,17 @@ def move_file(current_user):
     try:
         data = request.get_json(silent=True) or {}
         if 'source' not in data or 'destination' not in data:
-            return jsonify({"status": "error", "message": "Source and destination paths are required"}), 400
+            return error_response("Source and destination paths are required", 400)
 
         source_path = _norm_path(data['source'])
         destination_path = _norm_path(data['destination'])
 
         if source_path == "/" or destination_path == "/":
-            return jsonify({"status": "error", "message": "Cannot move root"}), 400
+            return error_response("Cannot move root", 400)
 
         # Förhindra att man flyttar mappen in i sig själv
         if source_path != destination_path and destination_path.startswith(source_path + "/"):
-            return jsonify({"status": "error", "message": "Cannot move a directory into itself"}), 400
+            return error_response("Cannot move a directory into itself", 400)
 
         logger.info(f"Moving from {source_path} to {destination_path}")
 
@@ -365,7 +357,7 @@ def move_file(current_user):
             file_path=source_path, user_id=current_user.id
         ).first()
         if not source_file:
-            return jsonify({"status": "error", "message": f"Source path not found: {source_path}"}), 404
+            return error_response(f"Source path not found: {source_path}", 404)
 
         # Validera att destinationens parent finns (om inte root)
         parent_path = os.path.dirname(destination_path) or "/"
@@ -374,11 +366,11 @@ def move_file(current_user):
                 file_path=parent_path, is_folder=True, user_id=current_user.id
             ).first()
             if not parent_dir:
-                return jsonify({"status": "error", "message": f"Destination directory does not exist: {parent_path}"}), 400
+                return error_response(f"Destination directory does not exist: {parent_path}", 400)
 
         # Destination får inte redan finnas
         if DriveFile.query.filter_by(file_path=destination_path, user_id=current_user.id).first():
-            return jsonify({"status": "error", "message": f"Destination already exists: {destination_path}"}), 400
+            return error_response(f"Destination already exists: {destination_path}", 400)
 
         if source_file.is_folder:
             # Flytta alla barn
@@ -393,12 +385,8 @@ def move_file(current_user):
         source_file.file_path = destination_path
         db.session.commit()
 
-        return jsonify({
-            "status": "success",
-            "message": f"Successfully moved {source_path} to {destination_path}",
-            "data": {"new_path": destination_path}
-        })
+        return success_response({"message": f"Successfully moved {source_path} to {destination_path}", "new_path": destination_path})
     except Exception as e:
         logger.error(f"Error in move_file: {str(e)}")
         db.session.rollback()
-        return jsonify({"status": "error", "message": "Failed to move file"}), 500
+        return error_response("Failed to move file", 500)

@@ -14,6 +14,14 @@ import json
 logger = logging.getLogger(__name__)
 schedule_bp = Blueprint('schedule_bp', __name__)
 
+
+def success_response(data=None, status_code=200):
+    return jsonify({"success": True, "data": data if data is not None else {}, "error": None}), status_code
+
+
+def error_response(message, status_code=400, data=None):
+    return jsonify({"success": False, "data": data, "error": message}), status_code
+
 # ---------------- Retry-hjälpare ----------------
 def retry_on_connection_error(func):
     """Retry DB-operationer som kan kasta OperationalError (t.ex. tappad MySQL-anslutning)."""
@@ -288,13 +296,10 @@ def get_schedule_settings(current_user):
         )
         db.session.add(s)
         db.session.commit()
-    return jsonify({
-        "status": "success",
-        "data": {
-            "showWeekends": bool(s.show_weekends),
-            "dayStart": int(s.day_start),
-            "dayEnd": int(s.day_end),
-        }
+    return success_response({
+        "showWeekends": bool(s.show_weekends),
+        "dayStart": int(s.day_start),
+        "dayEnd": int(s.day_end),
     })
 
 @schedule_bp.route('/settings', methods=['PUT'])
@@ -316,13 +321,10 @@ def update_schedule_settings(current_user):
         s.day_end = int(data["dayEnd"])
 
     db.session.commit()
-    return jsonify({
-        "status": "success",
-        "data": {
-            "showWeekends": bool(s.show_weekends),
-            "dayStart": int(s.day_start),
-            "dayEnd": int(s.day_end),
-        }
+    return success_response({
+        "showWeekends": bool(s.show_weekends),
+        "dayStart": int(s.day_start),
+        "dayEnd": int(s.day_end),
     })
 
 # ---------------- Routes: Family members ----------------
@@ -354,27 +356,23 @@ def get_family_members(current_user):
 
         db.session.commit()
 
-    return jsonify({
-        "status": "success",
-        "data": [{
+    return success_response([
+        {
             "id": m.id,
             "name": m.name,
             "color": m.color,
             "icon": m.icon
-        } for m in ms]
-    })
+        } for m in ms
+    ])
 
 @schedule_bp.route('/activities', methods=['POST'])
 @token_required
 @retry_on_connection_error
 def create_activity(current_user):
-    if request.is_json:
-        payload = request.get_json(silent=True) or {}
-    else:
-        payload = request.form.to_dict()
+    payload = request.get_json(silent=True) or {}
 
     if not payload:
-        return jsonify({"status": "error", "message": "Invalid request: No JSON or form data received"}), 400
+        return error_response("Invalid request: No JSON received", 400)
 
     # LÖST KONFLIKT: Använd den robusta metoden för att hantera deltagare från FormData
     if "participants" in payload and isinstance(payload["participants"], str):
@@ -414,7 +412,7 @@ def create_activity(current_user):
     try:
         v = _validate_activity_payload(payload)
     except ValueError as ve:
-        return jsonify({"status": "error", "message": str(ve)}), 400
+        return error_response(str(ve), 400)
 
     instances = _expand_instances(v)
 
@@ -439,7 +437,7 @@ def create_activity(current_user):
             unknown.append(ref)
 
     if unknown:
-        return jsonify({"status": "error", "message": "Unknown participants", "unknown": unknown}), 400
+        return error_response("Unknown participants", 400, {"unknown": unknown})
 
     for inst in instances:
         inst["participants"] = [resolved[p] for p in inst.get("participants", []) if p in resolved]
@@ -447,7 +445,7 @@ def create_activity(current_user):
     # Konflikter?
     conflicts = _check_for_conflicts(current_user.id, instances)
     if conflicts:
-        return jsonify({"status": "error", "message": "Conflicts detected", "conflicts": conflicts}), 409
+        return error_response("Conflicts detected", 409, {"conflicts": conflicts})
 
     # Skapa alla
     created_activities = []
@@ -474,20 +472,17 @@ def create_activity(current_user):
         created_activities.append(a)
 
     db.session.commit()
-    return jsonify({
-        "status": "success",
-        "data": {
-            "id": created_activities[0].id if len(created_activities) == 1 else None,
-            "created": len(created_activities)
-        }
-    }), 201
+    return success_response({
+        "id": created_activities[0].id if len(created_activities) == 1 else None,
+        "created": len(created_activities)
+    }, 201)
 @schedule_bp.route('/activities/<activity_id>', methods=['PUT'])
 @token_required
 @retry_on_connection_error
 def update_activity(current_user, activity_id):
     a = Activity.query.filter_by(id=activity_id, user_id=current_user.id).first()
     if not a:
-        return jsonify({"status": "error", "message": "Activity not found"}), 404
+        return error_response("Activity not found", 404)
 
     data = request.get_json(silent=True) or {}
 
@@ -526,13 +521,13 @@ def update_activity(current_user, activity_id):
             elif rlow in by_name:
                 new_ids.append(by_name[rlow].id)
             else:
-                return jsonify({"status": "error", "message": f"Unknown participant: {ref}"}), 400
+                return error_response(f"Unknown participant: {ref}", 400)
         a.participants.clear()
         for pid in new_ids:
             a.participants.append(by_id[pid])
 
     db.session.commit()
-    return jsonify({"status": "success"})
+    return success_response()
 
 @schedule_bp.route('/activities/<activity_id>', methods=['DELETE'])
 @token_required
@@ -540,10 +535,10 @@ def update_activity(current_user, activity_id):
 def delete_activity(current_user, activity_id):
     a = Activity.query.filter_by(id=activity_id, user_id=current_user.id).first()
     if not a:
-        return jsonify({"status": "error", "message": "Activity not found"}), 404
+        return error_response("Activity not found", 404)
     db.session.delete(a)
     db.session.commit()
-    return jsonify({"status": "success"})
+    return success_response()
 
 @schedule_bp.route('/activities/series/<series_id>', methods=['DELETE'])
 @token_required
@@ -551,11 +546,11 @@ def delete_activity(current_user, activity_id):
 def delete_activity_series(current_user, series_id):
     acts = Activity.query.filter_by(series_id=series_id, user_id=current_user.id).all()
     if not acts:
-        return jsonify({"status": "error", "message": "No activities for series"}), 404
+        return error_response("No activities for series", 404)
     for a in acts:
         db.session.delete(a)
     db.session.commit()
-    return jsonify({"status": "success", "deleted": len(acts)})
+    return success_response({"deleted": len(acts)})
 
 # ---------------- Import: add-activities (array ELLER {activities: [...]}) ----------------
 @schedule_bp.route('/add-activities', methods=['POST'])
@@ -565,12 +560,12 @@ def add_activities_from_json(current_user):
     try:
         payload = request.get_json(silent=True)
         if payload is None:
-            return jsonify({"status": "error", "message": "Invalid JSON"}), 400
+            return error_response("Invalid JSON", 400)
 
         # Acceptera både rå array och { activities: [...] }
         activities = payload if isinstance(payload, list) else payload.get("activities")
         if not isinstance(activities, list) or not activities:
-            return jsonify({"status": "error", "message": "Provide a non-empty array of activities (or { activities: [...] })"}), 400
+            return error_response("Provide a non-empty array of activities (or { activities: [...] })", 400)
 
         validated = []
         all_instances = []
@@ -578,7 +573,7 @@ def add_activities_from_json(current_user):
             try:
                 v = _validate_activity_payload(raw)
             except ValueError as ve:
-                return jsonify({"status": "error", "message": str(ve)}), 400
+                return error_response(str(ve), 400)
             validated.append(v)
             all_instances.extend(_expand_instances(v))
 
@@ -603,14 +598,14 @@ def add_activities_from_json(current_user):
                 unknown.append(ref)
 
         if unknown:
-            return jsonify({"status": "error", "message": "Unknown participants", "unknown": unknown}), 400
+            return error_response("Unknown participants", 400, {"unknown": unknown})
 
         for inst in all_instances:
             inst["participants"] = [resolved[p] for p in inst.get("participants", []) if p in resolved]
 
         conflicts = _check_for_conflicts(current_user.id, all_instances)
         if conflicts:
-            return jsonify({"status": "error", "message": "Conflicts detected", "conflicts": conflicts}), 409
+            return error_response("Conflicts detected", 409, {"conflicts": conflicts})
 
         # Skapa alla
         for inst in all_instances:
@@ -635,9 +630,9 @@ def add_activities_from_json(current_user):
             db.session.add(a)
 
         db.session.commit()
-        return jsonify({"status": "success", "message": f"Activities added: {len(all_instances)}"}), 201
+        return success_response({"message": f"Activities added: {len(all_instances)}"}, 201)
 
     except Exception as e:
         logger.error(f"add_activities_from_json error: {str(e)}")
         db.session.rollback()
-        return jsonify({"status": "error", "message": "Failed to add activities"}), 500
+        return error_response("Failed to add activities", 500)
