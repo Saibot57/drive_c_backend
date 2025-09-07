@@ -1,5 +1,5 @@
 # app.py
-from flask import Flask, jsonify, make_response, request
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from services.db_config import db
 from api.routes import api
@@ -20,32 +20,34 @@ import os
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def success_response(data=None, status_code=200):
+    return jsonify({"success": True, "data": data if data is not None else {}, "error": None}), status_code
+
+
+def error_response(message, status_code=400, data=None):
+    return jsonify({"success": False, "data": data, "error": message}), status_code
+
+
 def create_app():
     app = Flask(__name__)
 
-    # --- SPECIFIK OCH STRAM CORS FÖR /api/* ---
-    # - Exakta origins (måste matcha browserns Origin)
-    # - Tillåt vanliga metoder inkl. PATCH/OPTIONS
-    # - JWT i Authorization-header -> inga cookies -> supports_credentials=False
-    # - intercept_exceptions=False så CORS-fel inte maskeras som 500
     CORS(
         app,
         resources={r"/api/*": {
             "origins": CORS_ORIGINS,
             "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             "allow_headers": ["Authorization", "Content-Type", "X-Requested-With"],
-            "supports_credentials": False,
+            "supports_credentials": True,
         }},
         intercept_exceptions=False,
     )
 
-    # (Valfritt men robust): spegla begärda headers på preflight
     @app.after_request
     def mirror_requested_cors_headers(resp):
         origin = request.headers.get("Origin")
         acrh = request.headers.get("Access-Control-Request-Headers")
         if origin in CORS_ORIGINS and acrh:
-            # Säkerställ att alla begärda headers tillåts i svaret
             resp.headers["Access-Control-Allow-Headers"] = acrh
             vary = resp.headers.get("Vary", "")
             needed = ["Origin", "Access-Control-Request-Headers"]
@@ -73,23 +75,23 @@ def create_app():
     # --- Felhanterare ---
     @app.errorhandler(404)
     def not_found_error(error):
-        return make_response(jsonify({"status": "error", "message": "Resource not found"}), 404)
+        return error_response("Resource not found", 404)
 
-    @app.errorhandler(500)
-    def internal_error(error):
-        logger.error(f"Internal server error: {str(error)}")
+    @app.errorhandler(Exception)
+    def handle_exception(error):
+        logger.exception("Unhandled server error")
         db.session.rollback()
-        return make_response(jsonify({"status": "error", "message": "Internal server error"}), 500)
+        return error_response("Internal server error", 500)
 
     # --- Health check ---
     @app.route('/health')
     def health_check():
         try:
             db.session.execute('SELECT 1')
-            return jsonify({"status": "healthy", "database": "connected"})
+            return success_response({"status": "healthy", "database": "connected"})
         except Exception as e:
             logger.error(f"Health check failed: {str(e)}")
-            return jsonify({"status": "unhealthy", "database": str(e)}), 500
+            return error_response("unhealthy", 500, {"database": str(e)})
 
     return app
 
