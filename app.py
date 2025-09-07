@@ -15,6 +15,7 @@ from config.settings import (
 )
 import logging
 import os
+import traceback
 
 # Konfigurera loggning
 logging.basicConfig(level=logging.INFO)
@@ -79,7 +80,8 @@ def create_app():
 
     @app.errorhandler(Exception)
     def handle_exception(error):
-        logger.exception("Unhandled server error")
+        # Logga hela stack trace för att underlätta felsökning
+        logger.error(traceback.format_exc())
         db.session.rollback()
         return error_response("Internal server error", 500)
 
