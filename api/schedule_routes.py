@@ -364,42 +364,6 @@ def get_family_members(current_user):
         } for m in ms]
     })
 
-# ---------------- Routes: Activities (CRUD) ----------------
-@schedule_bp.route('/activities', methods=['GET'])
-@token_required
-@retry_on_connection_error
-def list_activities(current_user):
-    # Valfri filtrering
-    week = request.args.get("week", type=int)
-    year = request.args.get("year", type=int)
-
-    q = Activity.query.filter_by(user_id=current_user.id)
-    if week is not None:
-        q = q.filter_by(week=week)
-    if year is not None:
-        q = q.filter_by(year=year)
-    acts = q.all()
-
-    def dto(a: Activity):
-        return {
-            "id": a.id,
-            "seriesId": a.series_id,
-            "userId": a.user_id,
-            "name": a.name,
-            "icon": a.icon,
-            "day": a.day,
-            "week": a.week,
-            "year": a.year,
-            "startTime": a.start_time,
-            "endTime": a.end_time,
-            "location": a.location,
-            "notes": a.notes,
-            "color": a.color,
-            "participants": [m.id for m in a.participants],  # id:n utåt
-        }
-
-    return jsonify({"status": "success", "data": [dto(a) for a in acts]})
-
 @schedule_bp.route('/activities', methods=['POST'])
 @token_required
 @retry_on_connection_error
@@ -408,27 +372,33 @@ def create_activity(current_user):
         payload = request.get_json(silent=True) or {}
     else:
         payload = request.form.to_dict()
+
     if not payload:
         return jsonify({"status": "error", "message": "Invalid request: No JSON or form data received"}), 400
-    # Normalize participant IDs when sent via FormData
+
+    # LÖST KONFLIKT: Använd den robusta metoden för att hantera deltagare från FormData
     if "participants" in payload and isinstance(payload["participants"], str):
         raw_participants = payload["participants"]
         parsed = None
         try:
+            # Försök först att tolka det som JSON (t.ex. '["id1", "id2"]')
             parsed = json.loads(raw_participants)
         except (json.JSONDecodeError, TypeError):
             parsed = None
 
         if parsed is not None:
+            # Om det var giltig JSON, säkerställ att det blir en lista av strängar
             if isinstance(parsed, list):
                 payload["participants"] = [str(p) for p in parsed]
             else:
                 payload["participants"] = [str(parsed)]
         else:
+            # Om det inte var JSON, fall tillbaka till att dela med kommatecken
             payload["participants"] = [
                 p.strip() for p in raw_participants.split(",") if p.strip()
             ]
 
+    # Fortsätt med resten av din logik...
     for key in ("days", "dates"):
         if key in payload and isinstance(payload[key], str):
             try:
@@ -511,7 +481,6 @@ def create_activity(current_user):
             "created": len(created_activities)
         }
     }), 201
-
 @schedule_bp.route('/activities/<activity_id>', methods=['PUT'])
 @token_required
 @retry_on_connection_error
