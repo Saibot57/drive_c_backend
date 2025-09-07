@@ -5,18 +5,19 @@ from services.db_config import db, DriveFile
 from services.drive_connect import authenticate_drive_api, build_folder_tree, save_to_database_with_session
 from config.settings import FOLDER_ID
 from api.auth_routes import token_required
-from sqlalchemy.orm import Session
 import logging
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 api = Blueprint('api', __name__)
 
-# --- Preflight: svara tom 204 så auth/body-parsing inte körs ---
-@api.before_request
-def api_handle_preflight():
-    if request.method == 'OPTIONS':
-        return ("", 204)
+
+def success_response(data=None, status_code=200):
+    return jsonify({"success": True, "data": data if data is not None else {}, "error": None}), status_code
+
+
+def error_response(message, status_code=400, data=None):
+    return jsonify({"success": False, "data": data, "error": message}), status_code
 
 def check_database_connection():
     """Check database connection"""
@@ -31,10 +32,9 @@ def check_database_connection():
 def health_check():
     """Health check endpoint"""
     db_status = check_database_connection()
-    return jsonify({
-        "status": "healthy" if db_status == "connected" else "unhealthy",
-        "database": db_status
-    })
+    if db_status == "connected":
+        return success_response({"status": "healthy", "database": db_status})
+    return error_response("unhealthy", 500, {"database": db_status})
 
 @api.route('/files', methods=['GET'])
 @token_required
@@ -102,12 +102,12 @@ def get_files(current_user):
             else:
                 top_level_sections[top_folder]["files"].append(file_payload)
 
-        return jsonify({"status": "success", "data": list(top_level_sections.values())})
+        return success_response(list(top_level_sections.values()))
 
     except Exception as e:
         logger.error(f"Error in get_files: {str(e)}")
         db.session.remove()
-        return jsonify({"status": "error", "message": "Failed to fetch files"}), 500
+        return error_response("Failed to fetch files", 500)
 
 @api.route('/update', methods=['POST'])
 @token_required
@@ -120,12 +120,10 @@ def update_files(current_user):
         service = authenticate_drive_api()
         folder_tree = build_folder_tree(service, FOLDER_ID)
 
-        # 2) Egen session för den här operationen
-        dedicated_session = Session(db.engine)
+        session = db.session
         try:
-            # Preservera egna notes (utan URL)
             logger.info("Finding notes to preserve")
-            notes_to_preserve = dedicated_session.query(DriveFile).filter(
+            notes_to_preserve = session.query(DriveFile).filter(
                 and_(
                     or_(DriveFile.url.is_(None), DriveFile.url == ''),
                     DriveFile.is_folder.is_(False),
@@ -135,36 +133,29 @@ def update_files(current_user):
             preserved_notes = {n.file_path: n for n in notes_to_preserve}
             logger.info(f"Found {len(preserved_notes)} notes to preserve")
 
-            # Ta bort gamla Drive-poster för användaren (behåll egna notes)
             logger.info("Clearing existing Google Drive records")
-            dedicated_session.query(DriveFile).filter(
+            session.query(DriveFile).filter(
                 and_(DriveFile.url.isnot(None), DriveFile.user_id == current_user.id)
             ).delete(synchronize_session=False)
 
-            # Spara nya Drive-poster
             logger.info("Saving new data to database")
-            save_to_database_with_session(folder_tree, current_user.id, dedicated_session)
+            save_to_database_with_session(folder_tree, current_user.id, session)
 
-            # Commit
-            dedicated_session.commit()
+            session.commit()
             logger.info("Successfully updated files from Google Drive")
-
-            return jsonify({
-                "status": "success",
+            return success_response({
                 "message": "Files updated successfully",
                 "timestamp": datetime.utcnow().isoformat()
             })
 
         except Exception as e:
-            dedicated_session.rollback()
+            session.rollback()
             logger.error(f"Database operation failed: {str(e)}")
             raise
-        finally:
-            dedicated_session.close()
 
     except Exception as e:
         logger.error(f"Failed to update files: {str(e)}")
-        return jsonify({"status": "error", "message": "Failed to update files"}), 500
+        return error_response("Failed to update files", 500)
 
 @api.route('/sections', methods=['GET'])
 @token_required
@@ -180,13 +171,7 @@ def get_sections(current_user):
         } for f in files]
 
         logger.info(f"Found {len(sections)} sections")
-        return jsonify({"status": "success", "data": sections})
+        return success_response(sections)
     except Exception as e:
         logger.error(f"Error in get_sections: {str(e)}")
-        return jsonify({"status": "error", "message": "Failed to fetch sections"}), 500
-
-@api.errorhandler(Exception)
-def handle_error(error):
-    """Global error handler for the API blueprint."""
-    logger.exception("Unhandled error in api blueprint")
-    return jsonify({"status": "error", "message": "An unexpected error occurred"}), 500
+        return error_response("Failed to fetch sections", 500)
