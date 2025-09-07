@@ -9,7 +9,6 @@ from time import sleep
 from datetime import datetime
 import uuid
 import logging
-import json
 
 logger = logging.getLogger(__name__)
 schedule_bp = Blueprint('schedule_bp', __name__)
@@ -374,41 +373,10 @@ def create_activity(current_user):
     if not payload:
         return error_response("Invalid request: No JSON received", 400)
 
-    # LÖST KONFLIKT: Använd den robusta metoden för att hantera deltagare från FormData
-    if "participants" in payload and isinstance(payload["participants"], str):
-        raw_participants = payload["participants"]
-        parsed = None
-        try:
-            # Försök först att tolka det som JSON (t.ex. '["id1", "id2"]')
-            parsed = json.loads(raw_participants)
-        except (json.JSONDecodeError, TypeError):
-            parsed = None
+    # Förenklad hantering av deltagare: förvänta alltid en lista
+    if "participants" in payload and not isinstance(payload["participants"], list):
+        return error_response("'participants' must be an array of strings.", 400)
 
-        if parsed is not None:
-            # Om det var giltig JSON, säkerställ att det blir en lista av strängar
-            if isinstance(parsed, list):
-                payload["participants"] = [str(p) for p in parsed]
-            else:
-                payload["participants"] = [str(parsed)]
-        else:
-            # Om det inte var JSON, fall tillbaka till att dela med kommatecken
-            payload["participants"] = [
-                p.strip() for p in raw_participants.split(",") if p.strip()
-            ]
-
-    # Fortsätt med resten av din logik...
-    for key in ("days", "dates"):
-        if key in payload and isinstance(payload[key], str):
-            try:
-                payload[key] = json.loads(payload[key])
-            except (json.JSONDecodeError, TypeError):
-                pass
-    for key in ("week", "year"):
-        if key in payload:
-            try:
-                payload[key] = int(payload[key])
-            except (ValueError, TypeError):
-                pass
     try:
         v = _validate_activity_payload(payload)
     except ValueError as ve:
