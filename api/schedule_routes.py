@@ -421,22 +421,13 @@ def create_activity(current_user):
 
         if parsed is not None:
             if isinstance(parsed, list):
-                try:
-                    payload["participants"] = [int(p) for p in parsed]
-                except (ValueError, TypeError):
-                    return jsonify({"status": "error", "message": "Invalid format for participants"}), 400
+                payload["participants"] = [str(p) for p in parsed]
             else:
-                try:
-                    payload["participants"] = [int(parsed)]
-                except (ValueError, TypeError):
-                    return jsonify({"status": "error", "message": "Invalid format for participants"}), 400
+                payload["participants"] = [str(parsed)]
         else:
-            try:
-                payload["participants"] = [
-                    int(p.strip()) for p in raw_participants.split(",") if p.strip()
-                ]
-            except ValueError:
-                return jsonify({"status": "error", "message": "Invalid format for participants"}), 400
+            payload["participants"] = [
+                p.strip() for p in raw_participants.split(",") if p.strip()
+            ]
 
     for key in ("days", "dates"):
         if key in payload and isinstance(payload[key], str):
