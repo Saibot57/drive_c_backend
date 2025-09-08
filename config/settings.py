@@ -15,6 +15,7 @@ DB_NAME = os.environ.get('DATABASE_NAME')
 
 # Database URL
 DATABASE_URL = f'mysql://{DB_USERNAME}:{DB_PASSWORD}@{DB_HOSTNAME}/{DB_NAME}?charset=utf8mb4'
+f"?charset=utf8mb4"
 
 # Database Pool Settings
 DATABASE_POOL_OPTIONS = {
