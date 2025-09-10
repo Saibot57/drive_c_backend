@@ -134,6 +134,26 @@ def _validate_activity_payload(raw: dict):
     base_payload["week"] = _require_int("week", raw.get("week"))
     base_payload["year"] = _require_int("year", raw.get("year"))
 
+    # Compute first activity date for validating recurring end date
+    start_date = min(
+        datetime.fromisocalendar(
+            base_payload["year"], base_payload["week"], SV_TO_NUM[day.lower()]
+        ).date()
+        for day in base_payload["days"]
+    )
+
+    rec_end_raw = raw.get("recurringEndDate")
+    if rec_end_raw is not None:
+        if not isinstance(rec_end_raw, str):
+            raise ValueError("recurringEndDate must be 'YYYY-MM-DD'")
+        try:
+            end_date = datetime.strptime(rec_end_raw, "%Y-%m-%d").date()
+        except ValueError:
+            raise ValueError("recurringEndDate must be 'YYYY-MM-DD'")
+        if end_date < start_date:
+            raise ValueError("recurringEndDate cannot be earlier than start date")
+        base_payload["recurringEndDate"] = end_date
+
     return base_payload
 
 
