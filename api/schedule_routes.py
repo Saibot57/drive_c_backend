@@ -159,6 +159,25 @@ def _expand_instances(v: dict) -> list[dict]:
     return out
 
 
+def _activity_to_dict(a: Activity) -> dict:
+    """Serialize an Activity instance to a dict."""
+    return {
+        "id": a.id,
+        "seriesId": a.series_id,
+        "name": a.name,
+        "icon": a.icon,
+        "day": a.day,
+        "week": a.week,
+        "year": a.year,
+        "startTime": a.start_time,
+        "endTime": a.end_time,
+        "location": a.location,
+        "notes": a.notes,
+        "color": a.color,
+        "participants": [p.id for p in a.participants],
+    }
+
+
 # ---------------- Routes: Settings ----------------
 @schedule_bp.route("/settings", methods=["GET"])
 @token_required
@@ -253,24 +272,7 @@ def get_activities(current_user):
         user_id=current_user.id, year=year, week=week
     ).all()
 
-    result = [
-        {
-            "id": a.id,
-            "seriesId": a.series_id,
-            "name": a.name,
-            "icon": a.icon,
-            "day": a.day,
-            "week": a.week,
-            "year": a.year,
-            "startTime": a.start_time,
-            "endTime": a.end_time,
-            "location": a.location,
-            "notes": a.notes,
-            "color": a.color,
-            "participants": [p.id for p in a.participants],
-        }
-        for a in activities
-    ]
+    result = [_activity_to_dict(a) for a in activities]
     return success_response(result)
 
 
@@ -320,6 +322,10 @@ def create_activity(current_user):
         created_activities.append(a)
 
     db.session.commit()
+    if "recurringEndDate" in payload:
+        serialized = [_activity_to_dict(a) for a in created_activities]
+        return success_response(serialized, 201)
+
     return success_response(
         {"id": created_activities[0].id, "created": len(created_activities)}, 201
     )
