@@ -5,7 +5,7 @@ from api.auth_routes import token_required
 
 from sqlalchemy.exc import OperationalError
 from time import sleep
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from functools import wraps
 import uuid
 import logging
@@ -154,6 +154,24 @@ def _expand_instances(v: dict) -> list[dict]:
         if k in v
     }
     out = []
+    end_str = v.get("recurringEndDate")
+    if end_str:
+        start_monday = date.fromisocalendar(v["year"], v["week"], 1)
+        try:
+            end_date = datetime.strptime(end_str, "%Y-%m-%d").date()
+        except ValueError:
+            raise ValueError("recurringEndDate must be YYYY-MM-DD")
+        current_monday = start_monday
+        while current_monday <= end_date:
+            for d in v["days"]:
+                day_num = SV_TO_NUM[d.lower()]
+                inst_date = current_monday + timedelta(days=day_num - 1)
+                if inst_date > end_date:
+                    continue
+                iso_year, iso_week, _ = inst_date.isocalendar()
+                out.append({**base, "day": d, "week": iso_week, "year": iso_year})
+            current_monday += timedelta(weeks=1)
+        return out
     for d in v["days"]:
         out.append({**base, "day": d, "week": v["week"], "year": v["year"]})
     return out
