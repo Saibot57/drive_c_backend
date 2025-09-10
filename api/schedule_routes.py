@@ -381,6 +381,85 @@ def delete_activity(current_user, activity_id):
     return success_response()
 
 
+@schedule_bp.route("/activities/series/<series_id>", methods=["PUT"])
+@token_required
+@retry_on_connection_error
+def update_activity_series(current_user, series_id):
+    data = request.get_json(silent=True) or {}
+    acts = Activity.query.filter_by(series_id=series_id, user_id=current_user.id).all()
+    if not acts:
+        return error_response("No activities for series", 404)
+
+    allowed = [
+        "name",
+        "icon",
+        "participants",
+        "startTime",
+        "endTime",
+        "location",
+        "notes",
+        "color",
+    ]
+
+    try:
+        members_cache = None
+        for a in acts:
+            for key, value in data.items():
+                if key not in allowed:
+                    continue
+                if key == "startTime":
+                    a.start_time = _time_to_str(_parse_time_hhmm(value))
+                elif key == "endTime":
+                    a.end_time = _time_to_str(_parse_time_hhmm(value))
+                elif key == "participants":
+                    if members_cache is None:
+                        members_cache = FamilyMember.query.filter_by(user_id=current_user.id).all()
+                        members_cache = {m.id: m for m in members_cache}
+                    a.participants.clear()
+                    for pid in value or []:
+                        if pid in members_cache:
+                            a.participants.append(members_cache[pid])
+                else:
+                    if key == "name":
+                        setattr(a, "name", str(value).strip() or a.name)
+                    else:
+                        setattr(
+                            a,
+                            {
+                                "icon": "icon",
+                                "location": "location",
+                                "notes": "notes",
+                                "color": "color",
+                            }[key],
+                            value,
+                        )
+    except (ValueError, TypeError) as e:
+        return error_response(str(e))
+
+    db.session.commit()
+
+    result = [
+        {
+            "id": a.id,
+            "seriesId": a.series_id,
+            "name": a.name,
+            "icon": a.icon,
+            "day": a.day,
+            "week": a.week,
+            "year": a.year,
+            "startTime": a.start_time,
+            "endTime": a.end_time,
+            "location": a.location,
+            "notes": a.notes,
+            "color": a.color,
+            "participants": [p.id for p in a.participants],
+        }
+        for a in acts
+    ]
+
+    return success_response(result)
+
+
 @schedule_bp.route("/activities/series/<series_id>", methods=["DELETE"])
 @token_required
 @retry_on_connection_error
@@ -388,11 +467,10 @@ def delete_activity_series(current_user, series_id):
     acts = Activity.query.filter_by(series_id=series_id, user_id=current_user.id).all()
     if not acts:
         return error_response("No activities for series", 404)
-    num_deleted = len(acts)
     for a in acts:
         db.session.delete(a)
     db.session.commit()
-    return success_response({"deleted": num_deleted})
+    return success_response({"message": "Activity series deleted successfully"})
 
 
 @schedule_bp.route("/add-activities", methods=["POST"])
