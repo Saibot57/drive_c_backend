@@ -4,12 +4,14 @@ from models.schedule_models import Activity, FamilyMember, Settings
 from api.auth_routes import token_required
 
 from sqlalchemy.exc import OperationalError
+from sqlalchemy import func
 from time import sleep
 from datetime import datetime, date, timedelta
 from functools import wraps
 import uuid
 import logging
 import json
+import re
 
 logger = logging.getLogger(__name__)
 schedule_bp = Blueprint("schedule_bp", __name__)
@@ -93,6 +95,37 @@ def _norm_day(d) -> str:
         if s in SV_TO_NUM:
             return SV_WEEKDAYS[SV_TO_NUM[s]]
     raise ValueError("day must be a Swedish weekday name or 1..7")
+
+
+EMOJI_PATTERN = re.compile(
+    "[\U0001F300-\U0001FAFF\U00002700-\U000027BF]+", re.UNICODE
+)
+
+
+def _validate_hex_color(color):
+    if not isinstance(color, str) or not re.fullmatch(r"^#[0-9A-Fa-f]{6}$", color):
+        raise ValueError("color must be in format #RRGGBB")
+    return color
+
+
+def _validate_emoji(icon):
+    if not isinstance(icon, str) or not EMOJI_PATTERN.fullmatch(icon):
+        raise ValueError("icon must be a valid emoji")
+    return icon
+
+
+def _validate_member_name(name, user_id, exclude_id=None):
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("name is required")
+    q = FamilyMember.query.filter(
+        func.lower(FamilyMember.name) == name.strip().lower(),
+        FamilyMember.user_id == user_id,
+    )
+    if exclude_id:
+        q = q.filter(FamilyMember.id != exclude_id)
+    if q.first():
+        raise ValueError("name must be unique")
+    return name.strip()
 
 
 def _validate_activity_payload(raw: dict):
@@ -282,9 +315,12 @@ def get_family_members(current_user):
             {"name": "Mamma", "color": "#A020F0", "icon": "👩"},
             {"name": "Pappa", "color": "#FF9F45", "icon": "👨"},
         ]
-        for member_data in default_members:
+        for idx, member_data in enumerate(default_members, start=1):
             member = FamilyMember(
-                id=str(uuid.uuid4()), user_id=current_user.id, **member_data
+                id=str(uuid.uuid4()),
+                user_id=current_user.id,
+                display_order=idx,
+                **member_data,
             )
             db.session.add(member)
             ms.append(member)
@@ -293,6 +329,77 @@ def get_family_members(current_user):
     return success_response(
         [{"id": m.id, "name": m.name, "color": m.color, "icon": m.icon} for m in ms]
     )
+
+
+# ---------------- Routes: Family member CRUD ----------------
+@schedule_bp.route("/family-members", methods=["POST"])
+@token_required
+@retry_on_connection_error
+def create_family_member(current_user):
+    data = request.get_json(silent=True) or {}
+    try:
+        name = _validate_member_name(data.get("name"), current_user.id)
+        color = _validate_hex_color(data.get("color"))
+        icon = _validate_emoji(data.get("icon"))
+        display_order = data.get("displayOrder")
+        fm = FamilyMember(
+            id=str(uuid.uuid4()),
+            user_id=current_user.id,
+            name=name,
+            color=color,
+            icon=icon,
+            display_order=int(display_order) if display_order is not None else None,
+        )
+        db.session.add(fm)
+        db.session.commit()
+        return success_response(
+            {"id": fm.id, "name": fm.name, "color": fm.color, "icon": fm.icon},
+            201,
+        )
+    except (ValueError, TypeError) as ve:
+        return error_response(str(ve), 400)
+
+
+@schedule_bp.route("/family-members/<member_id>", methods=["PUT"])
+@token_required
+@retry_on_connection_error
+def update_family_member(current_user, member_id):
+    fm = FamilyMember.query.filter_by(id=member_id, user_id=current_user.id).first()
+    if not fm:
+        return error_response("Family member not found", 404)
+    data = request.get_json(silent=True) or {}
+    try:
+        if "name" in data:
+            fm.name = _validate_member_name(
+                data["name"], current_user.id, exclude_id=member_id
+            )
+        if "color" in data:
+            fm.color = _validate_hex_color(data["color"])
+        if "icon" in data:
+            fm.icon = _validate_emoji(data["icon"])
+        if "displayOrder" in data:
+            disp = data["displayOrder"]
+            fm.display_order = int(disp) if disp is not None else None
+        db.session.commit()
+    except (ValueError, TypeError) as ve:
+        return error_response(str(ve), 400)
+    return success_response(
+        {"id": fm.id, "name": fm.name, "color": fm.color, "icon": fm.icon}
+    )
+
+
+@schedule_bp.route("/family-members/<member_id>", methods=["DELETE"])
+@token_required
+@retry_on_connection_error
+def delete_family_member(current_user, member_id):
+    fm = FamilyMember.query.filter_by(id=member_id, user_id=current_user.id).first()
+    if not fm:
+        return error_response("Family member not found", 404)
+    if fm.activities:
+        return error_response("Family member has associated activities", 409)
+    db.session.delete(fm)
+    db.session.commit()
+    return "", 204
 
 
 # ---------------- Routes: Activities (CRUD) ----------------
