@@ -19,7 +19,9 @@ def ping_connection(connection, branch):
     try:
         connection.scalar("SELECT 1")
     except Exception:
-        connection.connection.connection.ping()
+        raw_conn = getattr(connection.connection, "connection", None)
+        if raw_conn is not None and hasattr(raw_conn, "ping"):
+            raw_conn.ping()
 
 class DriveFile(db.Model):
     __tablename__ = 'drive_files'
