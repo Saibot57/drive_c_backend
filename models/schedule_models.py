@@ -20,13 +20,14 @@ class FamilyMember(db.Model):
     __tablename__ = "family_member"
     __table_args__ = (
         db.Index("ix_family_member_user_name", "user_id", "name"),
+        db.UniqueConstraint("user_id", "name", name="uq_family_member_user_name"),
     )
 
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False)
     name = db.Column(db.String(100), nullable=False)
     color = db.Column(db.String(7), nullable=False)
-    icon = db.Column(db.String(10), nullable=False)
+    icon = db.Column(db.String(32), nullable=False)
     display_order = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(

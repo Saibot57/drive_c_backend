@@ -98,7 +98,7 @@ def _norm_day(d) -> str:
 
 
 EMOJI_PATTERN = re.compile(
-    "[\U0001F300-\U0001FAFF\U00002700-\U000027BF]+", re.UNICODE
+    r'^[\u2700-\u27BF\U0001F1E6-\U0001F1FF\U0001F300-\U0001FAFF\u200D\uFE0F]+$'
 )
 
 
@@ -306,7 +306,15 @@ def update_schedule_settings(current_user):
 @token_required
 @retry_on_connection_error
 def get_family_members(current_user):
-    ms = FamilyMember.query.filter_by(user_id=current_user.id).all()
+    ms = (
+        FamilyMember.query.filter_by(user_id=current_user.id)
+        .order_by(
+            (FamilyMember.display_order.is_(None)).asc(),
+            FamilyMember.display_order.asc(),
+            FamilyMember.name.asc(),
+        )
+        .all()
+    )
     if not ms:
         default_members = [
             {"name": "Rut", "color": "#FF6B6B", "icon": "👧"},
@@ -323,8 +331,16 @@ def get_family_members(current_user):
                 **member_data,
             )
             db.session.add(member)
-            ms.append(member)
         db.session.commit()
+        ms = (
+            FamilyMember.query.filter_by(user_id=current_user.id)
+            .order_by(
+                (FamilyMember.display_order.is_(None)).asc(),
+                FamilyMember.display_order.asc(),
+                FamilyMember.name.asc(),
+            )
+            .all()
+        )
 
     return success_response(
         [{"id": m.id, "name": m.name, "color": m.color, "icon": m.icon} for m in ms]
@@ -342,6 +358,13 @@ def create_family_member(current_user):
         color = _validate_hex_color(data.get("color"))
         icon = _validate_emoji(data.get("icon"))
         display_order = data.get("displayOrder")
+        if display_order is None:
+            max_order = (
+                db.session.query(func.max(FamilyMember.display_order))
+                .filter_by(user_id=current_user.id)
+                .scalar()
+            )
+            display_order = (max_order or 0) + 1
         fm = FamilyMember(
             id=str(uuid.uuid4()),
             user_id=current_user.id,
@@ -400,6 +423,37 @@ def delete_family_member(current_user, member_id):
     db.session.delete(fm)
     db.session.commit()
     return "", 204
+
+
+@schedule_bp.route("/family-members/reorder", methods=["POST"])
+@token_required
+@retry_on_connection_error
+def reorder_family_members(current_user):
+    data = request.get_json(silent=True) or {}
+    order = data.get("order")
+    if not isinstance(order, list):
+        return error_response("order must be an array", 400)
+    members = FamilyMember.query.filter_by(user_id=current_user.id).all()
+    if len(order) != len(members):
+        return error_response("Invalid member IDs", 400)
+    members_by_id = {m.id: m for m in members}
+    if set(order) != set(members_by_id.keys()):
+        return error_response("Invalid member IDs", 400)
+    for idx, mid in enumerate(order, start=1):
+        members_by_id[mid].display_order = idx
+    db.session.commit()
+    ms = (
+        FamilyMember.query.filter_by(user_id=current_user.id)
+        .order_by(
+            (FamilyMember.display_order.is_(None)).asc(),
+            FamilyMember.display_order.asc(),
+            FamilyMember.name.asc(),
+        )
+        .all()
+    )
+    return success_response(
+        [{"id": m.id, "name": m.name, "color": m.color, "icon": m.icon} for m in ms]
+    )
 
 
 # ---------------- Routes: Activities (CRUD) ----------------
