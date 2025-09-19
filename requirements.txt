@@ -5,3 +5,6 @@ PyMySQL
 bcrypt
 PyJWT
 python-dotenv
+requests>=2.32.0
+tenacity>=8.2.0
+python-dateutil>=2.9.0
