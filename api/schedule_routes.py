@@ -2,6 +2,11 @@ from flask import Blueprint, jsonify, request
 from services.db_config import db
 from models.schedule_models import Activity, FamilyMember, Settings
 from api.auth_routes import token_required
+from services.prompts import build_parse_prompt
+from services.llm_client import LLMError, parse_schedule_with_llm
+from services.ai_postprocess import normalize_and_align
+
+from requests import RequestException
 
 from sqlalchemy.exc import OperationalError
 from sqlalchemy import func
@@ -75,6 +80,15 @@ def _time_to_str(dt: datetime) -> str:
 def _require_int(name: str, val):
     if val is None:
         raise ValueError(f"{name} is required and must be an integer")
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        raise ValueError(f"{name} must be an integer")
+
+
+def _coerce_optional_int(name: str, val):
+    if val is None:
+        return None
     try:
         return int(val)
     except (ValueError, TypeError):
@@ -676,6 +690,69 @@ def delete_activity_series(current_user, series_id):
         db.session.delete(a)
     db.session.commit()
     return success_response({"message": "Activity series deleted successfully"})
+
+
+@schedule_bp.route("/ai-parse-schedule", methods=["POST"])
+@token_required
+def ai_parse_schedule(current_user):
+    data = request.get_json(silent=True) or {}
+    natural_input = (data.get("text") or "").strip()
+
+    if not natural_input:
+        return error_response("Text input is required", 400)
+    if len(natural_input) > 4000:
+        return error_response("Input too long", 400)
+
+    try:
+        week = _coerce_optional_int("week", data.get("week"))
+        year = _coerce_optional_int("year", data.get("year"))
+    except ValueError as exc:
+        return error_response(str(exc), 400)
+
+    members = (
+        FamilyMember.query.filter_by(user_id=current_user.id)
+        .order_by(FamilyMember.name.asc())
+        .all()
+    )
+    fm_context = [{"id": m.id, "name": m.name} for m in members]
+
+    try:
+        prompt = build_parse_prompt(natural_input, fm_context, week, year)
+        raw_activities = parse_schedule_with_llm(prompt)
+        aligned = normalize_and_align(raw_activities, fm_context, week, year)
+    except LLMError as exc:
+        logger.warning("LLM parse error for user %s: %s", current_user.id, exc)
+        return error_response("Failed to parse the AI assistant's response.", 502)
+    except RequestException as exc:
+        logger.warning("LLM request error for user %s: %s", current_user.id, exc)
+        return error_response("Failed to contact the AI assistant.", 502)
+    except ValueError as exc:
+        logger.warning("Normalization error for user %s: %s", current_user.id, exc)
+        return error_response(str(exc), 422)
+    except Exception:
+        logger.exception("Unexpected error in ai_parse_schedule")
+        return error_response("Internal server error.", 500)
+
+    validated: list[dict] = []
+    for activity in aligned:
+        try:
+            validated_payload = _validate_activity_payload(activity)
+        except ValueError as exc:
+            logger.warning(
+                "Dropping invalid AI activity for user %s: %s", current_user.id, exc
+            )
+            continue
+
+        sanitized = dict(validated_payload)
+        recurring_end = sanitized.get("recurringEndDate")
+        if isinstance(recurring_end, date):
+            sanitized["recurringEndDate"] = recurring_end.isoformat()
+        validated.append(sanitized)
+
+    if not validated:
+        return error_response("AI returned no valid activities after normalization.", 422)
+
+    return success_response({"activities": validated})
 
 
 @schedule_bp.route("/add-activities", methods=["POST"])
