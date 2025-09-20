@@ -10,7 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from services.db_config import db
 from api.schedule_routes import schedule_bp
 from services.ai_postprocess import normalize_and_align
-from services.llm_client import LLMError
+from services.llm_client import LLMError, _extract_first_json_blob
 from models.user import User
 from models.schedule_models import FamilyMember
 from config.settings import SECRET_KEY
@@ -190,3 +190,21 @@ def test_ai_parse_schedule_llm_failure(ai_client, monkeypatch):
 
     response = client.post('/api/schedule/ai-parse-schedule', json={'text': 'Hej'})
     assert response.status_code == 502
+
+
+def test_extract_first_json_blob_handles_nested_structures():
+    text = 'Svar:\n[{"name": "A", "participants": ["1", "2"], "meta": {"notes": "Hej"}}] extra'
+    blob = _extract_first_json_blob(text)
+    assert blob == '[{"name": "A", "participants": ["1", "2"], "meta": {"notes": "Hej"}}]'
+
+
+def test_extract_first_json_blob_prefers_outer_array_over_object():
+    text = '{"info": "metadata"}\n[{"name": "A"}]'
+    blob = _extract_first_json_blob(text)
+    assert blob == '[{"name": "A"}]'
+
+
+def test_extract_first_json_blob_ignores_braces_inside_strings():
+    text = '[{"name": "A", "note": "Use {curly} and [square]"}]'
+    blob = _extract_first_json_blob(text)
+    assert blob == text

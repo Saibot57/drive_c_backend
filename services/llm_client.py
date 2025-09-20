@@ -3,8 +3,7 @@ from __future__ import annotations
 
 import json
 import os
-import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import requests
 from requests import RequestException
@@ -34,22 +33,78 @@ def _anthropic_headers() -> Dict[str, str]:
     }
 
 
+def _match_balanced_json(text: str, start: int) -> Tuple[str, int]:
+    """Return the JSON blob that starts at ``start`` and its end index."""
+
+    opening = text[start]
+    pairs = {"[": "]", "{": "}"}
+    if opening not in pairs:
+        raise LLMError("Invalid JSON start character")
+
+    expected: List[str] = [pairs[opening]]
+    i = start + 1
+    in_string = False
+    escape = False
+
+    while i < len(text):
+        char = text[i]
+
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+        else:
+            if char == '"':
+                in_string = True
+            elif char in pairs:
+                expected.append(pairs[char])
+            elif char in (']', '}'):
+                if not expected or char != expected[-1]:
+                    raise LLMError("Mismatched JSON braces in LLM response")
+                expected.pop()
+                if not expected:
+                    return text[start : i + 1], i
+
+        i += 1
+
+    raise LLMError("Unterminated JSON blob in LLM response")
+
+
 def _extract_first_json_blob(text: str) -> str:
-    """Extract the first JSON object/array found in ``text``."""
+    """Extract the first complete JSON object/array found in ``text``."""
 
     if not text:
         raise LLMError("No content returned from LLM response")
 
-    block = re.search(r"```(?:json)?\s*(\{.*?\}|\[.*?\])\s*```", text, re.S)
-    if block:
-        return block.group(1)
+    candidates: List[Tuple[int, str, str]] = []
+    i = 0
+    length = len(text)
 
-    brace = re.search(r"(\{.*\})", text, re.S)
-    bracket = re.search(r"(\[.*\])", text, re.S)
-    candidate = (brace.group(1) if brace else None) or (bracket.group(1) if bracket else None)
-    if not candidate:
+    while i < length:
+        char = text[i]
+        if char in ('[', '{'):
+            try:
+                blob, end = _match_balanced_json(text, i)
+            except LLMError:
+                i += 1
+                continue
+            candidates.append((i, char, blob))
+            i = end
+        i += 1
+
+    if not candidates:
         raise LLMError("No JSON found in LLM response")
-    return candidate
+
+    array_candidates = [item for item in candidates if item[1] == '[']
+    if array_candidates:
+        array_candidates.sort(key=lambda item: item[0])
+        return array_candidates[0][2]
+
+    candidates.sort(key=lambda item: item[0])
+    return candidates[0][2]
 
 
 def _extract_text_from_response(payload: Dict[str, Any]) -> str:
