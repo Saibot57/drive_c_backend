@@ -17,6 +17,13 @@ SWEDISH_DAYS: List[str] = [
     "Söndag",
 ]
 
+STRICT_UNKNOWN = os.getenv("AI_PARSE_STRICT_UNKNOWN_PARTICIPANTS", "0") == "1"
+# Whether AI parsing should reject unknown participants.
+#
+# The default is non-strict (drop unknown participants quietly). If this flag is
+# enabled, the frontend must gracefully handle HTTP 422 responses triggered by
+# unknown participants.
+
 _DAY_NORMALIZATION = {
     "mandag": "Måndag",
     "måndag": "Måndag",
@@ -46,12 +53,6 @@ _DAY_NORMALIZATION = {
     "sön": "Söndag",
     "sunday": "Söndag",
 }
-
-
-def _strict_unknown_participants() -> bool:
-    return os.getenv("AI_PARSE_STRICT_UNKNOWN_PARTICIPANTS", "0") == "1"
-
-
 def _coerce_int(value: Any) -> Optional[int]:
     if value is None or value == "":
         return None
@@ -191,7 +192,6 @@ def map_participants_to_ids(
         if member.get("name")
     }
 
-    strict = _strict_unknown_participants()
     results: List[Dict[str, Any]] = []
 
     for item in items:
@@ -217,7 +217,7 @@ def map_participants_to_ids(
             else:
                 unknowns.append(identifier)
 
-        if strict and unknowns:
+        if STRICT_UNKNOWN and unknowns:
             raise ValueError(f"Unknown participants: {', '.join(unknowns)}")
 
         entry = dict(item)

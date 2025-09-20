@@ -7,6 +7,7 @@ from services.llm_client import LLMError, parse_schedule_with_llm
 from services.ai_postprocess import normalize_and_align
 
 from requests import RequestException
+from requests.exceptions import Timeout
 
 from sqlalchemy.exc import OperationalError
 from sqlalchemy import func
@@ -21,6 +22,8 @@ import re
 logger = logging.getLogger(__name__)
 schedule_bp = Blueprint("schedule_bp", __name__)
 
+UUID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
+
 # --- Standardiserade Svar ---
 def success_response(data=None, status_code=200):
     return jsonify({"success": True, "data": data if data is not None else {}, "error": None}), status_code
@@ -28,6 +31,14 @@ def success_response(data=None, status_code=200):
 
 def error_response(message, status_code=400, data=None):
     return jsonify({"success": False, "data": data, "error": message}), status_code
+
+
+def ensure_series_id(activity: dict) -> dict:
+    normalized = dict(activity)
+    sid = normalized.get("seriesId")
+    if not (isinstance(sid, str) and UUID_RE.match(sid)):
+        normalized["seriesId"] = str(uuid.uuid4())
+    return normalized
 
 
 # ---------------- Retry-hjälpare ----------------
@@ -159,7 +170,9 @@ def _validate_activity_payload(raw: dict):
     if not isinstance(participants, list):
         raise ValueError("participants must be an array")
 
-    series_id = raw.get("seriesId") or str(uuid.uuid4())
+    series_id = raw.get("seriesId")
+    if not (isinstance(series_id, str) and UUID_RE.match(series_id)):
+        series_id = str(uuid.uuid4())
 
     base_payload = {
         "name": name.strip(),
@@ -699,9 +712,9 @@ def ai_parse_schedule(current_user):
     natural_input = (data.get("text") or "").strip()
 
     if not natural_input:
-        return error_response("Text input is required", 400)
+        return error_response("Text saknas.", 400)
     if len(natural_input) > 4000:
-        return error_response("Input too long", 400)
+        return error_response("Texten är för lång.", 400)
 
     try:
         week = _coerce_optional_int("week", data.get("week"))
@@ -720,18 +733,22 @@ def ai_parse_schedule(current_user):
         prompt = build_parse_prompt(natural_input, fm_context, week, year)
         raw_activities = parse_schedule_with_llm(prompt)
         aligned = normalize_and_align(raw_activities, fm_context, week, year)
+        aligned = [ensure_series_id(activity) for activity in aligned]
     except LLMError as exc:
         logger.warning("LLM parse error for user %s: %s", current_user.id, exc)
-        return error_response("Failed to parse the AI assistant's response.", 502)
+        return error_response("Kunde inte tolka AI-svar.", 502)
+    except Timeout:
+        logger.warning("LLM request timeout for user %s", current_user.id)
+        return error_response("AI-tjänsten tog för lång tid att svara.", 502)
     except RequestException as exc:
         logger.warning("LLM request error for user %s: %s", current_user.id, exc)
-        return error_response("Failed to contact the AI assistant.", 502)
+        return error_response("Kunde inte kontakta AI-tjänsten.", 502)
     except ValueError as exc:
         logger.warning("Normalization error for user %s: %s", current_user.id, exc)
         return error_response(str(exc), 422)
     except Exception:
         logger.exception("Unexpected error in ai_parse_schedule")
-        return error_response("Internal server error.", 500)
+        return error_response("Internt serverfel.", 500)
 
     validated: list[dict] = []
     for activity in aligned:
@@ -750,7 +767,7 @@ def ai_parse_schedule(current_user):
         validated.append(sanitized)
 
     if not validated:
-        return error_response("AI returned no valid activities after normalization.", 422)
+        return error_response("AI returnerade inga giltiga aktiviteter efter normalisering.", 422)
 
     return success_response({"activities": validated})
 

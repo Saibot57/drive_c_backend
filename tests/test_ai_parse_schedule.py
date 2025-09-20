@@ -7,13 +7,24 @@ from sqlalchemy.pool import StaticPool
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+os.environ.setdefault('LLM_API_KEY', 'test-key')
+
 from services.db_config import db
-from api.schedule_routes import schedule_bp
-from services.ai_postprocess import normalize_and_align
+import api.schedule_routes as schedule_routes
+import services.ai_postprocess as ai_postprocess
 from services.llm_client import LLMError, _extract_first_json_blob
 from models.user import User
 from models.schedule_models import FamilyMember
 from config.settings import SECRET_KEY
+
+schedule_bp = schedule_routes.schedule_bp
+
+
+@pytest.fixture(autouse=True)
+def reset_strict_unknown(monkeypatch):
+    monkeypatch.setattr(ai_postprocess, 'STRICT_UNKNOWN', False)
+    yield
+    monkeypatch.setattr(ai_postprocess, 'STRICT_UNKNOWN', False)
 
 
 @pytest.fixture
@@ -64,7 +75,7 @@ def test_normalize_maps_participants_and_dates():
         'date': '2025-10-03',
     }]
 
-    result = normalize_and_align(items, fm)
+    result = ai_postprocess.normalize_and_align(items, fm)
     assert len(result) == 1
     entry = result[0]
     assert entry['participants'] == ['1', '2']
@@ -85,11 +96,11 @@ def test_normalize_requires_fields():
         'year': 2025,
     }]
 
-    assert normalize_and_align(items, fm) == []
+    assert ai_postprocess.normalize_and_align(items, fm) == []
 
 
 def test_normalize_strict_unknown_participant(monkeypatch):
-    monkeypatch.setenv('AI_PARSE_STRICT_UNKNOWN_PARTICIPANTS', '1')
+    monkeypatch.setattr(ai_postprocess, 'STRICT_UNKNOWN', True)
     fm = [{'id': '1', 'name': 'Rut'}]
     items = [{
         'name': 'Träning',
@@ -102,7 +113,7 @@ def test_normalize_strict_unknown_participant(monkeypatch):
     }]
 
     with pytest.raises(ValueError):
-        normalize_and_align(items, fm)
+        ai_postprocess.normalize_and_align(items, fm)
 
 
 def test_ai_parse_schedule_success(ai_client, monkeypatch):
@@ -154,7 +165,7 @@ def test_ai_parse_schedule_unknown_participant_dropped(ai_client, monkeypatch):
 
 def test_ai_parse_schedule_unknown_participant_strict(ai_client, monkeypatch):
     client, app, member_ids = ai_client
-    monkeypatch.setenv('AI_PARSE_STRICT_UNKNOWN_PARTICIPANTS', '1')
+    monkeypatch.setattr(ai_postprocess, 'STRICT_UNKNOWN', True)
 
     sample_response = [{
         'name': 'Solo',
@@ -178,6 +189,8 @@ def test_ai_parse_schedule_requires_text(ai_client):
     client, app, member_ids = ai_client
     response = client.post('/api/schedule/ai-parse-schedule', json={'text': ''})
     assert response.status_code == 400
+    payload = response.get_json()
+    assert payload['error'] == 'Text saknas.'
 
 
 def test_ai_parse_schedule_llm_failure(ai_client, monkeypatch):
