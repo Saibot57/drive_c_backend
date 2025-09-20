@@ -17,6 +17,8 @@ class LLMError(Exception):
 PROVIDER = os.getenv("LLM_PROVIDER", "anthropic")
 MODEL = os.getenv("LLM_MODEL", "claude-3-5-sonnet-20240620")
 API_KEY = os.getenv("LLM_API_KEY", "")
+if not API_KEY:
+    raise LLMError("LLM_API_KEY is not configured")
 TIMEOUT = int(os.getenv("LLM_HTTP_TIMEOUT_SECONDS", "25"))
 MAX_TOKENS = int(os.getenv("AI_PARSE_MAX_TOKENS", "1024"))
 
