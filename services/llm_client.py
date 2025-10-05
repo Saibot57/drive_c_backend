@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+from functools import lru_cache
 from typing import Any, Dict, List, Tuple
 
 import requests
@@ -14,23 +15,38 @@ class LLMError(Exception):
     """Raised when the LLM returns an unexpected or invalid response."""
 
 
-PROVIDER = os.getenv("LLM_PROVIDER", "anthropic")
-MODEL = os.getenv("LLM_MODEL", "claude-3-5-sonnet-20240620")
-API_KEY = os.getenv("LLM_API_KEY", "")
-if not API_KEY:
-    raise LLMError("LLM_API_KEY is not configured")
 TIMEOUT = int(os.getenv("LLM_HTTP_TIMEOUT_SECONDS", "25"))
 MAX_TOKENS = int(os.getenv("AI_PARSE_MAX_TOKENS", "1024"))
+
+
+@lru_cache(maxsize=1)
+def _get_llm_config() -> Tuple[str, str, str]:
+    """Read and validate LLM env config on first use and cache the result."""
+
+    provider = (os.getenv("LLM_PROVIDER", "anthropic") or "").strip()
+    api_key = os.getenv("LLM_API_KEY")
+    model = (os.getenv("LLM_MODEL", "claude-3-5-sonnet-20240620") or "").strip()
+
+    if not api_key:
+        raise LLMError("LLM_API_KEY is not configured")
+
+    return provider or "anthropic", api_key, model or "claude-3-5-sonnet-20240620"
+
+
+def is_llm_configured() -> bool:
+    """Return True if an LLM API key is configured (non-crashing health check)."""
+
+    return bool(os.getenv("LLM_API_KEY"))
 
 
 def _anthropic_endpoint() -> str:
     return "https://api.anthropic.com/v1/messages"
 
 
-def _anthropic_headers() -> Dict[str, str]:
+def _anthropic_headers(api_key: str) -> Dict[str, str]:
     return {
         "content-type": "application/json",
-        "x-api-key": API_KEY,
+        "x-api-key": api_key,
         "anthropic-version": "2023-06-01",
     }
 
@@ -127,20 +143,20 @@ def _extract_text_from_response(payload: Dict[str, Any]) -> str:
 def parse_schedule_with_llm(prompt: str) -> List[Dict[str, Any]]:
     """Send ``prompt`` to the configured LLM provider and parse the JSON array."""
 
-    if PROVIDER != "anthropic":
-        raise LLMError(f"Unsupported provider: {PROVIDER}")
-    if not API_KEY:
-        raise LLMError("LLM_API_KEY is not configured")
+    provider, api_key, model = _get_llm_config()
+
+    if provider != "anthropic":
+        raise LLMError(f"Unsupported provider: {provider}")
 
     payload = {
-        "model": MODEL,
+        "model": model,
         "max_tokens": MAX_TOKENS,
         "messages": [{"role": "user", "content": prompt}],
     }
 
     response = requests.post(
         _anthropic_endpoint(),
-        headers=_anthropic_headers(),
+        headers=_anthropic_headers(api_key),
         json=payload,
         timeout=TIMEOUT,
     )
