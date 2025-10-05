@@ -3,7 +3,7 @@ from services.db_config import db
 from models.schedule_models import Activity, FamilyMember, Settings
 from api.auth_routes import token_required
 from services.prompts import build_parse_prompt
-from services.llm_client import LLMError, parse_schedule_with_llm
+from services.llm_client import LLMError, is_llm_configured, parse_schedule_with_llm
 from services.ai_postprocess import normalize_and_align
 
 from requests import RequestException
@@ -736,7 +736,7 @@ def ai_parse_schedule(current_user):
         aligned = [ensure_series_id(activity) for activity in aligned]
     except LLMError as exc:
         logger.warning("LLM parse error for user %s: %s", current_user.id, exc)
-        return error_response("Kunde inte tolka AI-svar.", 502)
+        return error_response(str(exc), 502)
     except Timeout:
         logger.warning("LLM request timeout for user %s", current_user.id)
         return error_response("AI-tjänsten tog för lång tid att svara.", 502)
@@ -770,6 +770,14 @@ def ai_parse_schedule(current_user):
         return error_response("AI returnerade inga giltiga aktiviteter efter normalisering.", 422)
 
     return success_response({"activities": validated})
+
+
+@schedule_bp.route("/ai/health", methods=["GET"])
+@token_required
+def ai_health(current_user):
+    """Health endpoint indicating whether LLM configuration is present."""
+
+    return success_response({"configured": is_llm_configured()})
 
 
 @schedule_bp.route("/add-activities", methods=["POST"])
