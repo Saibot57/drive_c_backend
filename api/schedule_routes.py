@@ -736,7 +736,7 @@ def ai_parse_schedule(current_user):
         aligned = [ensure_series_id(activity) for activity in aligned]
     except LLMError as exc:
         logger.warning("LLM parse error for user %s: %s", current_user.id, exc)
-        return error_response(str(exc), 502)
+        return error_response(str(exc), 503)
     except Timeout:
         logger.warning("LLM request timeout for user %s", current_user.id)
         return error_response("AI-tjänsten tog för lång tid att svara.", 502)
