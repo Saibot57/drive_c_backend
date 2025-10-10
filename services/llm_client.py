@@ -23,19 +23,18 @@ MAX_TOKENS = int(os.getenv("AI_PARSE_MAX_TOKENS", "1024"))
 def _get_llm_config() -> Tuple[str, str, str]:
     """Read and validate LLM env config on first use and cache the result."""
 
-    provider = (os.getenv("LLM_PROVIDER", "anthropic") or "").strip()
+    provider = (os.getenv("LLM_PROVIDER", "gemini") or "").strip()
     api_key = os.getenv("LLM_API_KEY")
-    model = (os.getenv("LLM_MODEL", "claude-3-5-sonnet-20240620") or "").strip()
+    model = (os.getenv("LLM_MODEL", "gemini-1.5-flash") or "").strip()
 
     if not api_key:
         raise LLMError("LLM_API_KEY is not configured")
 
-    return provider or "anthropic", api_key, model or "claude-3-5-sonnet-20240620"
+    return provider or "gemini", api_key, model or "gemini-1.5-flash"
 
 
 def is_llm_configured() -> bool:
     """Return True if an LLM API key is configured (non-crashing health check)."""
-
     return bool(os.getenv("LLM_API_KEY"))
 
 
@@ -48,6 +47,17 @@ def _anthropic_headers(api_key: str) -> Dict[str, str]:
         "content-type": "application/json",
         "x-api-key": api_key,
         "anthropic-version": "2023-06-01",
+    }
+
+
+def _gemini_endpoint(model: str, api_key: str) -> str:
+    """Build Gemini API endpoint with model and API key."""
+    return f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+
+
+def _gemini_headers() -> Dict[str, str]:
+    return {
+        "content-type": "application/json",
     }
 
 
@@ -125,13 +135,29 @@ def _extract_first_json_blob(text: str) -> str:
     return candidates[0][2]
 
 
-def _extract_text_from_response(payload: Dict[str, Any]) -> str:
+def _extract_text_from_anthropic_response(payload: Dict[str, Any]) -> str:
     content = payload.get("content")
     if isinstance(content, list) and content:
         segment = content[0]
         if isinstance(segment, dict):
             return str(segment.get("text", ""))
     return ""
+
+
+def _extract_text_from_gemini_response(payload: Dict[str, Any]) -> str:
+    """Extract text from Gemini API response format."""
+    candidates = payload.get("candidates", [])
+    if not candidates:
+        raise LLMError("No candidates in Gemini response")
+    
+    first_candidate = candidates[0]
+    content = first_candidate.get("content", {})
+    parts = content.get("parts", [])
+    
+    if not parts:
+        raise LLMError("No parts in Gemini response")
+    
+    return str(parts[0].get("text", ""))
 
 
 @retry(
@@ -145,24 +171,45 @@ def parse_schedule_with_llm(prompt: str) -> List[Dict[str, Any]]:
 
     provider, api_key, model = _get_llm_config()
 
-    if provider != "anthropic":
+    if provider == "anthropic":
+        payload = {
+            "model": model,
+            "max_tokens": MAX_TOKENS,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        response = requests.post(
+            _anthropic_endpoint(),
+            headers=_anthropic_headers(api_key),
+            json=payload,
+            timeout=TIMEOUT,
+        )
+        response.raise_for_status()
+        data = response.json()
+        text = _extract_text_from_anthropic_response(data)
+        
+    elif provider == "gemini":
+        payload = {
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }],
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": MAX_TOKENS,
+            }
+        }
+        response = requests.post(
+            _gemini_endpoint(model, api_key),
+            headers=_gemini_headers(),
+            json=payload,
+            timeout=TIMEOUT,
+        )
+        response.raise_for_status()
+        data = response.json()
+        text = _extract_text_from_gemini_response(data)
+        
+    else:
         raise LLMError(f"Unsupported provider: {provider}")
 
-    payload = {
-        "model": model,
-        "max_tokens": MAX_TOKENS,
-        "messages": [{"role": "user", "content": prompt}],
-    }
-
-    response = requests.post(
-        _anthropic_endpoint(),
-        headers=_anthropic_headers(api_key),
-        json=payload,
-        timeout=TIMEOUT,
-    )
-    response.raise_for_status()
-    data = response.json()
-    text = _extract_text_from_response(data)
     json_blob = _extract_first_json_blob(text)
 
     try:
