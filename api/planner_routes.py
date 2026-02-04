@@ -47,6 +47,22 @@ def get_planner_activities(current_user):
     return success_response([_serialize_activity(activity) for activity in activities])
 
 
+@planner_api.route("/archives", methods=["GET"])
+@token_required
+def get_planner_archives(current_user):
+    archive_rows = (
+        db.session.query(PlannerActivity.archive_name)
+        .filter(
+            PlannerActivity.user_id == current_user.id,
+            PlannerActivity.archive_name.isnot(None),
+        )
+        .distinct()
+        .all()
+    )
+    archives = [row.archive_name for row in archive_rows]
+    return success_response(archives)
+
+
 @planner_api.route("/activities", methods=["POST"])
 @planner_api.route("/activities/sync", methods=["POST"])
 @token_required
