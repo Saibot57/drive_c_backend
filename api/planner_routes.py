@@ -28,26 +28,45 @@ def _serialize_activity(activity: PlannerActivity):
         "endTime": activity.end_time,
         "color": activity.color,
         "duration": activity.duration,
+        "archiveName": activity.archive_name,
     }
 
 
 @planner_api.route("/activities", methods=["GET"])
 @token_required
 def get_planner_activities(current_user):
-    activities = PlannerActivity.query.filter_by(user_id=current_user.id).all()
+    archive_name = request.args.get("archive_name")
+    if archive_name is None:
+        activities = PlannerActivity.query.filter_by(
+            user_id=current_user.id, archive_name=None
+        ).all()
+    else:
+        activities = PlannerActivity.query.filter_by(
+            user_id=current_user.id, archive_name=archive_name
+        ).all()
     return success_response([_serialize_activity(activity) for activity in activities])
 
 
+@planner_api.route("/activities", methods=["POST"])
 @planner_api.route("/activities/sync", methods=["POST"])
 @token_required
 def sync_planner_activities(current_user):
     payload = request.get_json(silent=True)
-    if not isinstance(payload, list):
+    archive_name = None
+    activities_payload = payload
+    if isinstance(payload, dict):
+        archive_name = payload.get("archiveName")
+        activities_payload = payload.get("activities")
+
+    if archive_name is not None and not isinstance(archive_name, str):
+        return error_response("archiveName must be a string", 400)
+
+    if not isinstance(activities_payload, list):
         return error_response("Payload must be a list of activities", 400)
 
     try:
         new_activities = []
-        for item in payload:
+        for item in activities_payload:
             if not isinstance(item, dict):
                 raise ValueError("Each activity must be an object")
 
@@ -81,11 +100,19 @@ def sync_planner_activities(current_user):
                     end_time=end_time,
                     color=item.get("color"),
                     duration=duration,
+                    archive_name=archive_name,
                 )
             )
 
         with db.session.begin():
-            PlannerActivity.query.filter_by(user_id=current_user.id).delete()
+            if archive_name is None:
+                PlannerActivity.query.filter_by(
+                    user_id=current_user.id, archive_name=None
+                ).delete()
+            else:
+                PlannerActivity.query.filter_by(
+                    user_id=current_user.id, archive_name=archive_name
+                ).delete()
             db.session.add_all(new_activities)
 
         return success_response({"count": len(new_activities)}, 201)
@@ -100,6 +127,12 @@ def sync_planner_activities(current_user):
 @planner_api.route("/activities", methods=["DELETE"])
 @token_required
 def delete_planner_activities(current_user):
-    PlannerActivity.query.filter_by(user_id=current_user.id).delete()
+    archive_name = request.args.get("archive_name")
+    if archive_name is None:
+        PlannerActivity.query.filter_by(user_id=current_user.id, archive_name=None).delete()
+    else:
+        PlannerActivity.query.filter_by(
+            user_id=current_user.id, archive_name=archive_name
+        ).delete()
     db.session.commit()
     return success_response({"message": "Planner activities deleted"})
