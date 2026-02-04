@@ -7,6 +7,7 @@ from api.calendar_routes import calendar_api
 from api.notes_routes import notes
 from api.auth_routes import auth
 from api.schedule_routes import schedule_bp
+from api.planner_routes import planner_bp
 from config.settings import (
     DATABASE_URL,
     DATABASE_POOL_OPTIONS,
@@ -72,6 +73,7 @@ def create_app():
     app.register_blueprint(notes, url_prefix='/api/notes')
     app.register_blueprint(auth, url_prefix='/api/auth')
     app.register_blueprint(schedule_bp, url_prefix='/api/schedule')
+    app.register_blueprint(planner_bp, url_prefix='/api/planner')
 
     # --- Felhanterare ---
     @app.errorhandler(404)
@@ -106,6 +108,7 @@ with app.app_context():
         from models.calendar import CalendarEvent, DayNote
         from models.user import User
         from models.schedule_models import Activity, FamilyMember, Settings
+        from models.planner_models import PlannerActivity
         db.create_all()
         logger.info("Database tables, including new schedule tables, created successfully")
     except Exception as e:
