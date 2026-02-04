@@ -7,15 +7,15 @@ from sqlalchemy.orm import relationship
 class User(db.Model):
     __tablename__ = 'users'
 
-    id = db.Column(db.String(100), primary_key=True)
+    # Ändrad till String(36) för att matcha UUID-längden i planner_activity
+    id = db.Column(db.String(36), primary_key=True)
     username = db.Column(db.String(64), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
 
-    # Relations (add these when needed)
-
+    # Relations
     calendar_events = relationship('CalendarEvent', backref='user', lazy=True,
                                   primaryjoin="User.id==CalendarEvent.user_id")
     day_notes = relationship('DayNote', backref='user', lazy=True,

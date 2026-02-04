@@ -6,7 +6,9 @@ class PlannerActivity(db.Model):
     __tablename__ = "planner_activity"
 
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False, index=True)
+    # user_id har här ändrats till en vanlig String(36) utan ForeignKey för att undvika
+    # OperationalError 3780 vid inkompatibla tabellinställningar i MySQL.
+    user_id = db.Column(db.String(36), nullable=False, index=True)
     title = db.Column(db.String(150), nullable=False)
     teacher = db.Column(db.String(150), nullable=True)
     room = db.Column(db.String(150), nullable=True)
