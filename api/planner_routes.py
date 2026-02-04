@@ -5,7 +5,7 @@ from api.auth_routes import token_required
 from api.routes import success_response, error_response
 import uuid
 
-planner_bp = Blueprint("planner_bp", __name__)
+planner_api = Blueprint("planner_api", __name__)
 
 
 def _coerce_int(name, value):
@@ -22,6 +22,7 @@ def _serialize_activity(activity: PlannerActivity):
         "title": activity.title,
         "teacher": activity.teacher,
         "room": activity.room,
+        "notes": activity.notes,
         "day": activity.day,
         "startTime": activity.start_time,
         "endTime": activity.end_time,
@@ -30,29 +31,23 @@ def _serialize_activity(activity: PlannerActivity):
     }
 
 
-@planner_bp.route("/activities", methods=["GET"])
+@planner_api.route("/activities", methods=["GET"])
 @token_required
 def get_planner_activities(current_user):
     activities = PlannerActivity.query.filter_by(user_id=current_user.id).all()
     return success_response([_serialize_activity(activity) for activity in activities])
 
 
-@planner_bp.route("/activities", methods=["POST"])
+@planner_api.route("/activities/sync", methods=["POST"])
 @token_required
-def save_planner_activities(current_user):
+def sync_planner_activities(current_user):
     payload = request.get_json(silent=True)
-    if payload is None:
-        return error_response("Invalid JSON payload", 400)
-
-    activities_payload = payload.get("activities") if isinstance(payload, dict) else payload
-    if not isinstance(activities_payload, list):
+    if not isinstance(payload, list):
         return error_response("Payload must be a list of activities", 400)
 
     try:
-        PlannerActivity.query.filter_by(user_id=current_user.id).delete()
-
         new_activities = []
-        for item in activities_payload:
+        for item in payload:
             if not isinstance(item, dict):
                 raise ValueError("Each activity must be an object")
 
@@ -80,6 +75,7 @@ def save_planner_activities(current_user):
                     title=title.strip(),
                     teacher=item.get("teacher"),
                     room=item.get("room"),
+                    notes=item.get("notes"),
                     day=day.strip(),
                     start_time=start_time,
                     end_time=end_time,
@@ -88,18 +84,20 @@ def save_planner_activities(current_user):
                 )
             )
 
-        db.session.add_all(new_activities)
-        db.session.commit()
+        with db.session.begin():
+            PlannerActivity.query.filter_by(user_id=current_user.id).delete()
+            db.session.add_all(new_activities)
+
         return success_response({"count": len(new_activities)}, 201)
     except ValueError as exc:
         db.session.rollback()
         return error_response(str(exc), 400)
     except Exception:
         db.session.rollback()
-        return error_response("Failed to save planner activities", 500)
+        return error_response("Failed to sync planner activities", 500)
 
 
-@planner_bp.route("/activities", methods=["DELETE"])
+@planner_api.route("/activities", methods=["DELETE"])
 @token_required
 def delete_planner_activities(current_user):
     PlannerActivity.query.filter_by(user_id=current_user.id).delete()

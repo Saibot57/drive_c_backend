@@ -10,6 +10,7 @@ class PlannerActivity(db.Model):
     title = db.Column(db.String(150), nullable=False)
     teacher = db.Column(db.String(150), nullable=True)
     room = db.Column(db.String(150), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
     day = db.Column(db.String(20), nullable=False)
     start_time = db.Column(db.String(5), nullable=False)
     end_time = db.Column(db.String(5), nullable=False)

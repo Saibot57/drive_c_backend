@@ -7,7 +7,7 @@ from api.calendar_routes import calendar_api
 from api.notes_routes import notes
 from api.auth_routes import auth
 from api.schedule_routes import schedule_bp
-from api.planner_routes import planner_bp
+from api.planner_routes import planner_api
 from config.settings import (
     DATABASE_URL,
     DATABASE_POOL_OPTIONS,
@@ -73,7 +73,7 @@ def create_app():
     app.register_blueprint(notes, url_prefix='/api/notes')
     app.register_blueprint(auth, url_prefix='/api/auth')
     app.register_blueprint(schedule_bp, url_prefix='/api/schedule')
-    app.register_blueprint(planner_bp, url_prefix='/api/planner')
+    app.register_blueprint(planner_api, url_prefix='/api/planner')
 
     # --- Felhanterare ---
     @app.errorhandler(404)
