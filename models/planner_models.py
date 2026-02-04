@@ -16,3 +16,4 @@ class PlannerActivity(db.Model):
     end_time = db.Column(db.String(5), nullable=False)
     color = db.Column(db.String(7), nullable=True)
     duration = db.Column(db.Integer, nullable=False)
+    archive_name = db.Column(db.String(150), nullable=True)
