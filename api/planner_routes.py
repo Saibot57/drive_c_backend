@@ -3,14 +3,37 @@ from services.db_config import db
 from models.planner_models import PlannerActivity, PlannerCourse
 from api.auth_routes import token_required
 from api.routes import success_response, error_response
-from api.schedule_routes import retry_on_connection_error
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import OperationalError, IntegrityError
+from functools import wraps
+from time import sleep
 import uuid
+import re
 import logging
 
-planner_api = Blueprint("planner_api", __name__)
+# Configure logger
 logger = logging.getLogger(__name__)
 
+planner_api = Blueprint("planner_api", __name__)
+
+# Regex for HH:MM format (00:00 to 23:59)
+TIME_FORMAT_REGEX = re.compile(r'^([01]\d|2[0-3]):([0-5]\d)$')
+
+# --- Helpers & Decorators ---
+
+def retry_on_connection_error(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        for attempt in range(3):
+            try:
+                return func(*args, **kwargs)
+            except OperationalError as e:
+                logger.warning("DB OperationalError (attempt %s/3): %s", attempt + 1, e)
+                db.session.rollback()
+                if attempt < 2:
+                    sleep(0.5)
+                    continue
+                raise
+    return wrapper
 
 def _coerce_int(name, value):
     try:
@@ -18,6 +41,10 @@ def _coerce_int(name, value):
     except (TypeError, ValueError):
         raise ValueError(f"{name} must be an integer")
 
+def _calculate_duration_minutes(start_time: str, end_time: str) -> int:
+    sh, sm = map(int, start_time.split(':'))
+    eh, em = map(int, end_time.split(':'))
+    return (eh * 60 + em) - (sh * 60 + sm)
 
 def _serialize_activity(activity: PlannerActivity):
     return {
@@ -35,7 +62,6 @@ def _serialize_activity(activity: PlannerActivity):
         "archiveName": activity.archive_name,
     }
 
-
 def _serialize_course(course: PlannerCourse):
     return {
         "id": course.id,
@@ -47,9 +73,11 @@ def _serialize_course(course: PlannerCourse):
         "category": course.category,
     }
 
+# --- Activity Routes ---
 
 @planner_api.route("/activities", methods=["GET"])
 @token_required
+@retry_on_connection_error
 def get_planner_activities(current_user):
     archive_name = request.args.get("archive_name")
     if archive_name is None:
@@ -62,9 +90,9 @@ def get_planner_activities(current_user):
         ).all()
     return success_response([_serialize_activity(activity) for activity in activities])
 
-
 @planner_api.route("/archives", methods=["GET"])
 @token_required
+@retry_on_connection_error
 def get_planner_archives(current_user):
     archive_rows = (
         db.session.query(PlannerActivity.archive_name)
@@ -78,14 +106,15 @@ def get_planner_archives(current_user):
     archives = [row.archive_name for row in archive_rows]
     return success_response(archives)
 
-
 @planner_api.route("/activities", methods=["POST"])
 @planner_api.route("/activities/sync", methods=["POST"])
 @token_required
+@retry_on_connection_error
 def sync_planner_activities(current_user):
     payload = request.get_json(silent=True)
     archive_name = None
     activities_payload = payload
+
     if isinstance(payload, dict):
         archive_name = payload.get("archiveName")
         activities_payload = payload.get("activities")
@@ -106,27 +135,31 @@ def sync_planner_activities(current_user):
             day = item.get("day")
             start_time = item.get("startTime")
             end_time = item.get("endTime")
-            duration = _coerce_int("duration", item.get("duration"))
 
             if not title or not isinstance(title, str):
                 raise ValueError("title is required")
             if not day or not isinstance(day, str):
                 raise ValueError("day is required")
-            if not start_time or not isinstance(start_time, str):
-                raise ValueError("startTime is required")
-            if not end_time or not isinstance(end_time, str):
-                raise ValueError("endTime is required")
 
-            activity_id = item.get("id") if isinstance(item.get("id"), str) else str(uuid.uuid4())
+            if not start_time or not isinstance(start_time, str) or not TIME_FORMAT_REGEX.match(start_time):
+                raise ValueError(f"Invalid startTime format: {start_time}")
+            if not end_time or not isinstance(end_time, str) or not TIME_FORMAT_REGEX.match(end_time):
+                raise ValueError(f"Invalid endTime format: {end_time}")
+
+            if start_time >= end_time:
+                raise ValueError("startTime must be before endTime")
+
+            duration = _calculate_duration_minutes(start_time, end_time)
+            activity_id = str(uuid.uuid4())
 
             new_activities.append(
                 PlannerActivity(
                     id=activity_id,
                     user_id=current_user.id,
                     title=title.strip(),
-                    teacher=item.get("teacher"),
-                    room=item.get("room"),
-                    notes=item.get("notes"),
+                    teacher=item.get("teacher") or "",
+                    room=item.get("room") or "",
+                    notes=item.get("notes") or "",
                     day=day.strip(),
                     start_time=start_time,
                     end_time=end_time,
@@ -136,39 +169,35 @@ def sync_planner_activities(current_user):
                 )
             )
 
-        with db.session.begin():
-            if archive_name is None:
-                PlannerActivity.query.filter_by(
-                    user_id=current_user.id, archive_name=None
-                ).delete()
-            else:
-                PlannerActivity.query.filter_by(
-                    user_id=current_user.id, archive_name=archive_name
-                ).delete()
-            db.session.add_all(new_activities)
+        if archive_name is None:
+            PlannerActivity.query.filter_by(user_id=current_user.id, archive_name=None).delete(synchronize_session=False)
+        else:
+            PlannerActivity.query.filter_by(user_id=current_user.id, archive_name=archive_name).delete(synchronize_session=False)
 
-        return success_response({"count": len(new_activities)}, 201)
+        db.session.add_all(new_activities)
+        db.session.commit()
+        return success_response({"count": len(new_activities), "activities": [_serialize_activity(a) for a in new_activities]}, 201)
     except ValueError as exc:
         db.session.rollback()
         return error_response(str(exc), 400)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Sync failed: {e}")
         db.session.rollback()
         return error_response("Failed to sync planner activities", 500)
 
-
 @planner_api.route("/activities", methods=["DELETE"])
 @token_required
+@retry_on_connection_error
 def delete_planner_activities(current_user):
     archive_name = request.args.get("archive_name")
     if archive_name is None:
-        PlannerActivity.query.filter_by(user_id=current_user.id, archive_name=None).delete()
+        PlannerActivity.query.filter_by(user_id=current_user.id, archive_name=None).delete(synchronize_session=False)
     else:
-        PlannerActivity.query.filter_by(
-            user_id=current_user.id, archive_name=archive_name
-        ).delete()
+        PlannerActivity.query.filter_by(user_id=current_user.id, archive_name=archive_name).delete(synchronize_session=False)
     db.session.commit()
     return success_response({"message": "Planner activities deleted"})
 
+# --- Course Routes ---
 
 @planner_api.route("/courses", methods=["GET"])
 @token_required
@@ -176,7 +205,6 @@ def delete_planner_activities(current_user):
 def get_planner_courses(current_user):
     courses = PlannerCourse.query.filter_by(user_id=current_user.id).all()
     return success_response([_serialize_course(course) for course in courses])
-
 
 @planner_api.route("/courses/sync", methods=["POST"])
 @token_required
@@ -190,34 +218,19 @@ def sync_planner_courses(current_user):
     if not isinstance(courses_payload, list):
         return error_response("Payload must contain a list of courses", 400)
 
-    logger.info("Syncing planner courses for user %s", current_user.id)
     try:
         new_courses = []
         seen_ids = set()
         for item in courses_payload:
-            if not isinstance(item, dict):
-                raise ValueError("Each course must be an object")
-
             title = item.get("title")
             if not title or not isinstance(title, str):
                 raise ValueError("title is required")
 
             duration = _coerce_int("duration", item.get("duration", 60))
-            if duration <= 0:
-                raise ValueError("duration must be a positive integer")
-
-            incoming_id = item.get("id")
-            if isinstance(incoming_id, str) and incoming_id.strip():
-                incoming_id = incoming_id.strip()
-                existing = PlannerCourse.query.filter_by(id=incoming_id).first()
-                if existing and existing.user_id != current_user.id:
-                    raise ValueError("Invalid course id")
-                course_id = incoming_id
-            else:
-                course_id = str(uuid.uuid4())
+            course_id = item.get("id") if isinstance(item.get("id"), str) else str(uuid.uuid4())
 
             if course_id in seen_ids:
-                raise ValueError("Duplicate course id in request")
+                raise ValueError("Duplicate course id")
             seen_ids.add(course_id)
 
             new_courses.append(
@@ -233,30 +246,11 @@ def sync_planner_courses(current_user):
                 )
             )
 
-        PlannerCourse.query.filter_by(user_id=current_user.id).delete(
-            synchronize_session=False
-        )
+        PlannerCourse.query.filter_by(user_id=current_user.id).delete(synchronize_session=False)
         db.session.add_all(new_courses)
         db.session.commit()
-        logger.info(
-            "Synced %s planner courses for user %s", len(new_courses), current_user.id
-        )
-        return success_response(
-            {
-                "count": len(new_courses),
-                "courses": [_serialize_course(course) for course in new_courses],
-            },
-            201,
-        )
-    except ValueError as exc:
+        return success_response({"count": len(new_courses), "courses": [_serialize_course(c) for c in new_courses]}, 201)
+    except Exception as e:
         db.session.rollback()
-        logger.error("Validation error syncing courses for user %s: %s", current_user.id, exc)
-        return error_response(str(exc), 400)
-    except IntegrityError:
-        db.session.rollback()
-        logger.error("Integrity error syncing courses for user %s", current_user.id)
-        return error_response("Database integrity error. Please try again.", 400)
-    except Exception:
-        db.session.rollback()
-        logger.error("Failed to sync planner courses for user %s", current_user.id)
-        return error_response("Failed to sync planner courses", 500)
+        logger.error(f"Course sync failed: {e}")
+        return error_response("Failed to sync courses", 500)
