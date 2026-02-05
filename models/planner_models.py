@@ -19,3 +19,27 @@ class PlannerActivity(db.Model):
     color = db.Column(db.String(7), nullable=True)
     duration = db.Column(db.Integer, nullable=False)
     archive_name = db.Column(db.String(150), nullable=True)
+
+
+class PlannerCourse(db.Model):
+    __tablename__ = "planner_course"
+
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = db.Column(db.String(36), nullable=False, index=True)
+    title = db.Column(db.String(150), nullable=False)
+    teacher = db.Column(db.String(150), nullable=True)
+    room = db.Column(db.String(150), nullable=True)
+    duration = db.Column(db.Integer, nullable=False, default=60)
+    color = db.Column(db.String(20), nullable=True)
+    category = db.Column(db.String(50), nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "teacher": self.teacher,
+            "room": self.room,
+            "duration": self.duration,
+            "color": self.color,
+            "category": self.category,
+        }
