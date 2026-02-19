@@ -1,4 +1,3 @@
-# app.py
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from services.db_config import db
@@ -82,7 +81,6 @@ def create_app():
 
     @app.errorhandler(Exception)
     def handle_exception(error):
-        # Logga hela stack trace för att underlätta felsökning
         logger.error(traceback.format_exc())
         db.session.rollback()
         return error_response("Internal server error", 500)
@@ -108,7 +106,9 @@ with app.app_context():
         from models.calendar import CalendarEvent, DayNote
         from models.user import User
         from models.schedule_models import Activity, FamilyMember, Settings
-        from models.planner_models import PlannerActivity
+        # IMPORTANT: import both so db.create_all() sees both tables
+        from models.planner_models import PlannerActivity, PlannerCourse
+
         db.create_all()
         logger.info("Database tables, including new schedule tables, created successfully")
     except Exception as e:

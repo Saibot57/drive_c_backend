@@ -1,7 +1,6 @@
 from services.db_config import db
 import uuid
 
-
 class PlannerActivity(db.Model):
     __tablename__ = "planner_activity"
 
@@ -17,6 +16,7 @@ class PlannerActivity(db.Model):
     start_time = db.Column(db.String(5), nullable=False)
     end_time = db.Column(db.String(5), nullable=False)
     color = db.Column(db.String(7), nullable=True)
+    category = db.Column(db.String(255), nullable=True)
     duration = db.Column(db.Integer, nullable=False)
     archive_name = db.Column(db.String(150), nullable=True)
 
@@ -31,7 +31,7 @@ class PlannerCourse(db.Model):
     room = db.Column(db.String(150), nullable=True)
     duration = db.Column(db.Integer, nullable=False, default=60)
     color = db.Column(db.String(20), nullable=True)
-    category = db.Column(db.String(50), nullable=True)
+    category = db.Column(db.String(255), nullable=True)
 
     def to_dict(self):
         return {
