@@ -137,6 +137,10 @@ def sync_planner_activities(current_user):
     try:
         new_activities = []
         for item in activities_payload:
+            # Respect client IDs if they exist to prevent ID churn and preserve Undo stack
+            # This is the fix discussed with the agent.
+            activity_id = item.get("id") or str(uuid.uuid4())
+
             item = {k: v for k, v in item.items() if k in ALLOWED_ACTIVITY_INBOUND_FIELDS}
             title, day = item.get("title"), item.get("day")
             start_time, end_time = item.get("startTime"), item.get("endTime")
@@ -148,11 +152,19 @@ def sync_planner_activities(current_user):
 
             duration = _calculate_duration_minutes(start_time, end_time)
             new_activities.append(PlannerActivity(
-                id=str(uuid.uuid4()), user_id=current_user.id, title=title.strip(),
-                teacher=item.get("teacher") or "", room=item.get("room") or "",
-                notes=item.get("notes") or "", day=day.strip(),
-                start_time=start_time, end_time=end_time, color=item.get("color"),
-                category=item.get("category"), duration=duration, archive_name=archive_name
+                id=activity_id,
+                user_id=current_user.id,
+                title=title.strip(),
+                teacher=item.get("teacher") or "",
+                room=item.get("room") or "",
+                notes=item.get("notes") or "",
+                day=day.strip(),
+                start_time=start_time,
+                end_time=end_time,
+                color=item.get("color"),
+                category=item.get("category"),
+                duration=duration,
+                archive_name=archive_name
             ))
 
         filter_args = {"user_id": current_user.id, "archive_name": archive_name}
@@ -197,6 +209,7 @@ def sync_planner_courses(current_user):
             title = item.get("title")
             if not title: raise ValueError("Title required")
 
+            # Courses already respected client-supplied IDs
             course_id = item.get("id") or str(uuid.uuid4())
             new_courses.append(PlannerCourse(
                 id=course_id, user_id=current_user.id, title=title.strip(),
