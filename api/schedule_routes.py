@@ -598,7 +598,7 @@ def update_activity(current_user, activity_id):
         return error_response(str(e))
 
     db.session.commit()
-    return success_response()
+    return success_response(_activity_to_dict(a))
 
 
 @schedule_bp.route("/activities/<activity_id>", methods=["DELETE"])

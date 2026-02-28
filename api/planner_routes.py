@@ -185,6 +185,17 @@ def delete_planner_activities(current_user):
     db.session.commit()
     return success_response({"message": "Deleted"})
 
+@planner_api.route("/<activity_id>", methods=["DELETE"])
+@token_required
+@retry_on_connection_error
+def delete_planner_activity(current_user, activity_id):
+    activity = PlannerActivity.query.filter_by(id=activity_id, user_id=current_user.id).first()
+    if not activity:
+        return error_response("Activity not found", 404)
+    db.session.delete(activity)
+    db.session.commit()
+    return success_response({"message": "Deleted"})
+
 # --- Course Routes ---
 
 @planner_api.route("/courses", methods=["GET"])
