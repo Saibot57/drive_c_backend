@@ -7,6 +7,7 @@ from api.notes_routes import notes
 from api.auth_routes import auth
 from api.schedule_routes import schedule_bp
 from api.planner_routes import planner_api
+from api.command_center_routes import command_center_api
 from config.settings import (
     DATABASE_URL,
     DATABASE_POOL_OPTIONS,
@@ -73,6 +74,7 @@ def create_app():
     app.register_blueprint(auth, url_prefix='/api/auth')
     app.register_blueprint(schedule_bp, url_prefix='/api/schedule')
     app.register_blueprint(planner_api, url_prefix='/api/planner')
+    app.register_blueprint(command_center_api, url_prefix='/api/command-center')
 
     # --- Felhanterare ---
     @app.errorhandler(404)
@@ -108,6 +110,7 @@ with app.app_context():
         from models.schedule_models import Activity, FamilyMember, Settings
         # IMPORTANT: import both so db.create_all() sees both tables
         from models.planner_models import PlannerActivity, PlannerCourse
+        from models.command_center_models import CCNote, CCTodo, NoteTemplate
 
         db.create_all()
         logger.info("Database tables, including new schedule tables, created successfully")
