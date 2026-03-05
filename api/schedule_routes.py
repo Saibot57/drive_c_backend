@@ -730,7 +730,7 @@ def ai_parse_schedule(current_user):
     fm_context = [{"id": m.id, "name": m.name} for m in members]
 
     try:
-        prompt = build_parse_prompt(natural_input, fm_context, week, year)
+        prompt = build_parse_prompt(natural_input, fm_context, week, year, today=date.today())
         raw_activities = parse_schedule_with_llm(prompt)
         aligned = normalize_and_align(raw_activities, fm_context, week, year)
         aligned = [ensure_series_id(activity) for activity in aligned]

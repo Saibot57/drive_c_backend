@@ -16,7 +16,7 @@ class LLMError(Exception):
 
 
 TIMEOUT = int(os.getenv("LLM_HTTP_TIMEOUT_SECONDS", "25"))
-MAX_TOKENS = int(os.getenv("AI_PARSE_MAX_TOKENS", "1024"))
+MAX_TOKENS = int(os.getenv("AI_PARSE_MAX_TOKENS", "2048"))
 
 
 @lru_cache(maxsize=1)
@@ -25,12 +25,12 @@ def _get_llm_config() -> Tuple[str, str, str]:
 
     provider = (os.getenv("LLM_PROVIDER", "gemini") or "").strip()
     api_key = os.getenv("LLM_API_KEY")
-    model = (os.getenv("LLM_MODEL", "gemini-1.5-flash") or "").strip()
+    model = (os.getenv("LLM_MODEL", "gemini-2.0-flash") or "").strip()
 
     if not api_key:
         raise LLMError("LLM_API_KEY is not configured")
 
-    return provider or "gemini", api_key, model or "gemini-1.5-flash"
+    return provider or "gemini", api_key, model or "gemini-2.0-flash"
 
 
 def is_llm_configured() -> bool:
