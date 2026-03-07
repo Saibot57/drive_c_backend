@@ -123,7 +123,14 @@ def _norm_day(d) -> str:
 
 
 EMOJI_PATTERN = re.compile(
-    r'^[\u2700-\u27BF\U0001F1E6-\U0001F1FF\U0001F300-\U0001FAFF\u200D\uFE0F]+$'
+    r'^[\u2190-\u2BFF'          # Arrows, Misc Technical, Misc Symbols, Dingbats
+    r'\u3030\u303D\u3297\u3299' # CJK symbols used as emoji
+    r'\U0001F1E6-\U0001F1FF'    # Regional indicators (flags)
+    r'\U0001F000-\U0001FAFF'    # Mahjong..Symbols Extended-A (all supplemental emoji)
+    r'\u200D'                   # Zero Width Joiner
+    r'\uFE0E\uFE0F'            # Variation Selectors
+    r'\u20E3'                   # Combining Enclosing Keycap
+    r']+$'
 )
 
 
