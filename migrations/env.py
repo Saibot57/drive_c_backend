@@ -19,7 +19,8 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-DATABASE_URL = os.getenv('ALEMBIC_DATABASE_URL', 'sqlite:///alembic.db')
+from config.settings import DATABASE_URL as _APP_DB_URL
+DATABASE_URL = os.getenv('ALEMBIC_DATABASE_URL', _APP_DB_URL)
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
