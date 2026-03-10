@@ -107,7 +107,7 @@ def create_chat_session(current_user):
     system_prompt = build_chat_system_prompt(fm_context, week, year)
     session_id = create_session(str(current_user.id), system_prompt)
 
-    return _success({"sessionId": session_id}), 201
+    return _success({"sessionId": session_id}, 201)
 
 
 @chat_api.route("/sessions/<session_id>/messages", methods=["POST"])
