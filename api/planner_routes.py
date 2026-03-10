@@ -137,9 +137,12 @@ def sync_planner_activities(current_user):
     try:
         new_activities = []
         for item in activities_payload:
-            # Respect client IDs if they exist to prevent ID churn and preserve Undo stack
-            # This is the fix discussed with the agent.
-            activity_id = item.get("id") or str(uuid.uuid4())
+            # Respect client IDs for current schedule to prevent ID churn and preserve Undo stack.
+            # Archive saves always get new IDs to avoid PK collision with current-schedule entries.
+            if archive_name:
+                activity_id = str(uuid.uuid4())
+            else:
+                activity_id = item.get("id") or str(uuid.uuid4())
 
             item = {k: v for k, v in item.items() if k in ALLOWED_ACTIVITY_INBOUND_FIELDS}
             title, day = item.get("title"), item.get("day")
