@@ -12,6 +12,7 @@ import models.schedule_models  # noqa: F401
 import models.calendar  # noqa: F401
 import models.user  # noqa: F401
 import models.command_center_models  # noqa: F401
+import models.planner_models  # noqa: F401
 
 config = context.config
 

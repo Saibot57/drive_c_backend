@@ -173,6 +173,7 @@ def sync_planner_activities(current_user):
         db.session.commit()
         return success_response({"count": len(new_activities), "activities": [_serialize_activity(a) for a in new_activities]}, 201)
     except Exception as e:
+        logger.error("Error syncing planner activities: %s", e, exc_info=True)
         db.session.rollback()
         return error_response(str(e), 400)
 
@@ -234,5 +235,6 @@ def sync_planner_courses(current_user):
         db.session.commit()
         return success_response({"count": len(new_courses)}, 201)
     except Exception as e:
+        logger.error("Error syncing planner courses: %s", e, exc_info=True)
         db.session.rollback()
         return error_response(str(e), 400)
