@@ -1,3 +1,4 @@
+from datetime import datetime
 from services.db_config import db
 import uuid
 
@@ -19,6 +20,7 @@ class PlannerActivity(db.Model):
     category = db.Column(db.String(255), nullable=True)
     duration = db.Column(db.Integer, nullable=False)
     archive_name = db.Column(db.String(150), nullable=True)
+    deleted_at = db.Column(db.DateTime, nullable=True, default=None, index=True)
 
 
 class PlannerCourse(db.Model):

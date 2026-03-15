@@ -1,3 +1,4 @@
+from datetime import datetime
 from flask import Blueprint, request
 from services.db_config import db
 from models.planner_models import PlannerActivity, PlannerCourse
@@ -102,9 +103,9 @@ def _serialize_course(course: PlannerCourse):
 def get_planner_activities(current_user):
     archive_name = request.args.get("archive_name")
     if archive_name is None:
-        activities = PlannerActivity.query.filter_by(user_id=current_user.id, archive_name=None).all()
+        activities = PlannerActivity.query.filter_by(user_id=current_user.id, archive_name=None).filter(PlannerActivity.deleted_at.is_(None)).all()
     else:
-        activities = PlannerActivity.query.filter_by(user_id=current_user.id, archive_name=archive_name).all()
+        activities = PlannerActivity.query.filter_by(user_id=current_user.id, archive_name=archive_name).filter(PlannerActivity.deleted_at.is_(None)).all()
     return success_response([_serialize_activity(activity) for activity in activities])
 
 @planner_api.route("/archives", methods=["GET"])
@@ -113,7 +114,7 @@ def get_planner_activities(current_user):
 def get_planner_archives(current_user):
     archive_rows = (
         db.session.query(PlannerActivity.archive_name)
-        .filter(PlannerActivity.user_id == current_user.id, PlannerActivity.archive_name.isnot(None))
+        .filter(PlannerActivity.user_id == current_user.id, PlannerActivity.archive_name.isnot(None), PlannerActivity.deleted_at.is_(None))
         .distinct().all()
     )
     archives = [row.archive_name for row in archive_rows]
@@ -171,7 +172,17 @@ def sync_planner_activities(current_user):
             ))
 
         filter_args = {"user_id": current_user.id, "archive_name": archive_name}
-        PlannerActivity.query.filter_by(**filter_args).delete(synchronize_session=False)
+        # Soft-delete existing active rows
+        PlannerActivity.query.filter_by(**filter_args).filter(
+            PlannerActivity.deleted_at.is_(None)
+        ).update({"deleted_at": datetime.utcnow()}, synchronize_session=False)
+        # Hard-delete any soft-deleted rows whose IDs collide with incoming payload
+        incoming_ids = [a.id for a in new_activities]
+        if incoming_ids:
+            PlannerActivity.query.filter(
+                PlannerActivity.id.in_(incoming_ids),
+                PlannerActivity.deleted_at.isnot(None)
+            ).delete(synchronize_session=False)
         db.session.add_all(new_activities)
         db.session.commit()
         return success_response({"count": len(new_activities), "activities": [_serialize_activity(a) for a in new_activities]}, 201)
@@ -185,7 +196,9 @@ def sync_planner_activities(current_user):
 @retry_on_connection_error
 def delete_planner_activities(current_user):
     archive_name = request.args.get("archive_name")
-    PlannerActivity.query.filter_by(user_id=current_user.id, archive_name=archive_name).delete(synchronize_session=False)
+    PlannerActivity.query.filter_by(user_id=current_user.id, archive_name=archive_name).filter(
+        PlannerActivity.deleted_at.is_(None)
+    ).update({"deleted_at": datetime.utcnow()}, synchronize_session=False)
     db.session.commit()
     return success_response({"message": "Deleted"})
 
@@ -193,10 +206,12 @@ def delete_planner_activities(current_user):
 @token_required
 @retry_on_connection_error
 def delete_planner_activity(current_user, activity_id):
-    activity = PlannerActivity.query.filter_by(id=activity_id, user_id=current_user.id).first()
+    activity = PlannerActivity.query.filter_by(id=activity_id, user_id=current_user.id).filter(
+        PlannerActivity.deleted_at.is_(None)
+    ).first()
     if not activity:
         return error_response("Activity not found", 404)
-    db.session.delete(activity)
+    activity.deleted_at = datetime.utcnow()
     db.session.commit()
     return success_response({"message": "Deleted"})
 

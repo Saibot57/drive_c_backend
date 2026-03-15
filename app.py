@@ -103,6 +103,20 @@ def create_app():
 
 app = create_app()
 
+
+@app.cli.command("purge-deleted-activities")
+def purge_deleted_activities():
+    """Permanently remove soft-deleted planner activities older than 30 days."""
+    from datetime import datetime, timedelta
+    from models.planner_models import PlannerActivity
+    cutoff = datetime.utcnow() - timedelta(days=30)
+    count = PlannerActivity.query.filter(
+        PlannerActivity.deleted_at.isnot(None),
+        PlannerActivity.deleted_at < cutoff
+    ).delete(synchronize_session=False)
+    db.session.commit()
+    print(f"Purged {count} soft-deleted activities older than 30 days.")
+
 # Initiera databas och skapa tabeller
 with app.app_context():
     try:
