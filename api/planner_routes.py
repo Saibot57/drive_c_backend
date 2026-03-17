@@ -135,6 +135,9 @@ def sync_planner_activities(current_user):
     if not isinstance(activities_payload, list):
         return error_response("Payload must be a list of activities", 400)
 
+    if archive_name and len(activities_payload) == 0:
+        return error_response("Cannot save an empty archive — use DELETE to remove it", 400)
+
     try:
         new_activities = []
         for item in activities_payload:
