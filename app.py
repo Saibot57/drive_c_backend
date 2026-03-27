@@ -9,6 +9,7 @@ from api.schedule_routes import schedule_bp
 from api.planner_routes import planner_api
 from api.command_center_routes import command_center_api
 from api.chat_routes import chat_api
+from api.workspace_routes import workspace_api
 from config.settings import (
     DATABASE_URL,
     DATABASE_POOL_OPTIONS,
@@ -77,6 +78,7 @@ def create_app():
     app.register_blueprint(planner_api, url_prefix='/api/planner')
     app.register_blueprint(command_center_api, url_prefix='/api/command-center')
     app.register_blueprint(chat_api, url_prefix='/api/schedule/chat')
+    app.register_blueprint(workspace_api, url_prefix='/api/workspace')
 
     # --- Felhanterare ---
     @app.errorhandler(404)
@@ -127,6 +129,7 @@ with app.app_context():
         # IMPORTANT: import both so db.create_all() sees both tables
         from models.planner_models import PlannerActivity, PlannerCourse
         from models.command_center_models import CCNote, CCTodo, NoteTemplate
+        from models.workspace_models import Surface, WorkspaceElement, SurfaceElement
 
         db.create_all()
         logger.info("Database tables, including new schedule tables, created successfully")
