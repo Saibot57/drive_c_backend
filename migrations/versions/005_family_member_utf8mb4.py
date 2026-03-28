@@ -18,9 +18,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute("ALTER TABLE family_member CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
-    op.execute("ALTER TABLE activity CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
-    op.execute("ALTER TABLE activity_participants CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+    # Only convert the icon columns to avoid FK charset conflicts with users table
+    op.execute("ALTER TABLE family_member MODIFY icon VARCHAR(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL")
+    op.execute("ALTER TABLE family_member MODIFY name VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL")
+    op.execute("ALTER TABLE activity MODIFY icon VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL")
+    op.execute("ALTER TABLE activity MODIFY name VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL")
 
 
 def downgrade() -> None:
