@@ -1,7 +1,9 @@
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from googleapiclient.http import MediaIoBaseDownload
 from datetime import datetime
+import io
 import json
 import logging
 from services.db_config import db, DriveFile
@@ -224,6 +226,36 @@ def save_to_database(items, user_id, parent_path=''):
     except Exception as e:
         logger.error(f"Error in save_to_database: {str(e)}")
         raise
+
+def fetch_file_bytes(file_id: str) -> bytes:
+    """
+    Downloads the raw bytes of a Google Drive file by id using the service
+    account credentials. Intended for the PDF proxy — callers MUST verify
+    ownership (DriveFile.user_id) before calling this.
+
+    This function is additive and does not touch any existing Drive helper.
+
+    Args:
+        file_id: Google Drive file id
+
+    Returns:
+        bytes: raw file contents
+
+    Raises:
+        HttpError: if the Drive API call fails
+        Exception: any other unexpected failure
+    """
+    logger.info("Fetching file bytes from Drive: %s", file_id)
+    service = authenticate_drive_api()
+    request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
+    buf = io.BytesIO()
+    downloader = MediaIoBaseDownload(buf, request)
+    done = False
+    while not done:
+        _, done = downloader.next_chunk()
+    buf.seek(0)
+    return buf.read()
+
 
 def save_to_database_with_session(items, user_id, session, parent_path=''):
     """

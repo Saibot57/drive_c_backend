@@ -42,7 +42,7 @@ class WorkspaceElement(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    VALID_TYPES = {'text', 'table', 'mindmap', 'list', 'kanban', 'sticky'}
+    VALID_TYPES = {'text', 'table', 'mindmap', 'list', 'kanban', 'sticky', 'pdf'}
 
     @staticmethod
     def generate_id():
