@@ -29,7 +29,7 @@ def proxy_pdf(current_user):
     payload = request.get_json(silent=True) or {}
     source = payload.get("source")
     if source is None:
-        return error_response("source is required", 400)
+        return error_response("source krävs", 400)
 
     try:
         data, filename = resolve_to_bytes(current_user, source)
@@ -37,7 +37,7 @@ def proxy_pdf(current_user):
         return error_response(str(e), e.status_code)
     except Exception:
         logger.exception("PDF proxy: unexpected error")
-        return error_response("Internal error while fetching PDF", 500)
+        return error_response("Internt fel vid hämtning av PDF.", 500)
 
     # Stream the bytes back as a raw PDF. We do NOT wrap in the success
     # envelope because the client reads this as an ArrayBuffer for pdf.js.
