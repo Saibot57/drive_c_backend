@@ -11,6 +11,7 @@ from api.command_center_routes import command_center_api
 from api.chat_routes import chat_api
 from api.workspace_routes import workspace_api
 from api.pdf_proxy_routes import pdf_proxy_api
+from api.image_proxy_routes import image_proxy_api
 from config.settings import (
     DATABASE_URL,
     DATABASE_POOL_OPTIONS,
@@ -81,6 +82,7 @@ def create_app():
     app.register_blueprint(chat_api, url_prefix='/api/schedule/chat')
     app.register_blueprint(workspace_api, url_prefix='/api/workspace')
     app.register_blueprint(pdf_proxy_api, url_prefix='/api/workspace')
+    app.register_blueprint(image_proxy_api, url_prefix='/api/workspace')
 
     # --- Felhanterare ---
     @app.errorhandler(404)
