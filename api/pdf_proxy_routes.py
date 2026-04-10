@@ -9,6 +9,7 @@ Auth:  JWT (token_required)
 """
 
 import logging
+import urllib.parse
 
 from flask import Blueprint, Response, request
 
@@ -47,7 +48,10 @@ def proxy_pdf(current_user):
         headers={
             "Content-Length": str(len(data)),
             "Cache-Control": "private, max-age=300",
-            "Content-Disposition": f'inline; filename="{filename}"',
+            "Content-Disposition": "inline; filename=\"{}\"; filename*=UTF-8''{}".format(
+                filename.encode("ascii", "replace").decode("ascii"),
+                urllib.parse.quote(filename),
+            ),
             "X-Content-Type-Options": "nosniff",
         },
     )
