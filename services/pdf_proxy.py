@@ -19,6 +19,7 @@ import base64
 import ipaddress
 import logging
 import socket
+import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Tuple
@@ -90,8 +91,10 @@ def _resolve_gdrive(current_user, source: dict) -> Tuple[bytes, str]:
             file_id,
         )
         raise PdfProxyError(
-            "Filen hittades inte eller saknar behörighet. "
-            "Den måste vara synkad till ditt Drive C-konto.",
+            "Google Drive-filen hittades inte i ditt Drive C-konto. "
+            "PDF-visaren kan bara öppna filer som är synkade till din "
+            "Drive C-filmapp. Öppna filen direkt via filhanteraren istället, "
+            "eller synka mappen som innehåller filen.",
             status_code=403,
         )
 
@@ -147,7 +150,22 @@ def _resolve_onedrive(source: dict) -> Tuple[bytes, str]:
 
     api_url = _onedrive_share_to_api_url(share_url)
     logger.info("PDF proxy: onedrive share -> shares API URL")
-    return _fetch_public(api_url, allow_redirects=True)
+
+    try:
+        return _fetch_public(api_url, allow_redirects=True)
+    except PdfProxyError as e:
+        # Re-raise with a OneDrive-specific hint if the shares API rejected us
+        msg = str(e)
+        if "401" in msg or "403" in msg:
+            logger.warning("PDF proxy: OneDrive shares API returned auth error for %s", share_url)
+            raise PdfProxyError(
+                "OneDrive nekade åtkomst. Filen måste delas som "
+                "\"Alla med länken\" (Anyone with the link). "
+                "Öppna delningsinställningarna i OneDrive och ändra "
+                "till \"Alla med länken\" innan du kopierar länken.",
+                status_code=403,
+            )
+        raise
 
 
 def _onedrive_share_to_api_url(share_url: str) -> str:
@@ -220,6 +238,15 @@ def _fetch_public(url: str, allow_redirects: bool = True) -> Tuple[bytes, str]:
                 )
     except PdfProxyError:
         raise
+    except urllib.error.HTTPError as e:
+        logger.warning(
+            "PDF proxy: HTTP %s from %s — %s",
+            e.code, url, e.reason,
+        )
+        raise PdfProxyError(
+            f"Kunde inte hämta URL (HTTP {e.code}: {e.reason}).",
+            status_code=502,
+        )
     except Exception as e:
         logger.exception("PDF proxy: public fetch failed for %s", url)
         raise PdfProxyError(f"Kunde inte hämta URL: {e}", status_code=502)
