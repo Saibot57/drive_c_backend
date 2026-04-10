@@ -29,7 +29,7 @@ DATABASE_POOL_OPTIONS = {
 # Google Drive Settings
 FOLDER_ID = os.environ.get('FOLDER_ID')
 GOOGLE_CREDENTIALS_PATH = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', 'credentials.json')
-DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.metadata.readonly']
+DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 
 # CORS Settings
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
